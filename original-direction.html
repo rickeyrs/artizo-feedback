@@ -1,0 +1,1968 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Artizo Sport — coach app prototype</title>
+  <script>
+    (function () {
+      var d = document.documentElement, q = new URLSearchParams(location.search), t = q.get('theme'), saved = null;
+      try { saved = localStorage.getItem('artizo-theme'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = (saved === 'light' || saved === 'dark') ? saved : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      d.dataset.theme = t;
+      if (q.get('embed') === '1') d.classList.add('is-embed');
+    })();
+  </script>
+  <style>
+    /* OD-LAYOUT-PRIMITIVES v1 — structure only: display, flex/grid, overflow, wrapping, ratio.
+       Put this @layer first; product CSS outside the layer always wins. */
+    @layer od-layout {
+      :where(.od-stack,.od-row,.od-row-top,.od-cluster,.od-grid,.od-field,.od-stat,.od-cell,.od-tile) > :where(*) { min-width: 0; }
+
+      /* containers */
+      .od-stack   { display: flex; flex-direction: column; gap: var(--od-gap, 8px); }
+      .od-row     { display: flex; align-items: center; gap: var(--od-gap, 8px); }
+      .od-row-top { display: flex; align-items: flex-start; gap: var(--od-gap, 8px); }
+      .od-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--od-gap, 8px); }
+      .od-fill    { flex: 1 1 0; min-width: 0; }
+      .od-fixed   { flex: none; }
+      .od-grid    { display: grid; gap: var(--od-gap, 12px); grid-template-columns: repeat(var(--od-cols, 3), minmax(0, 1fr)); }
+
+      /* stacked information: each piece is its own line — never sibling inline spans */
+      .od-stat, .od-field, .od-cell { display: grid; gap: var(--od-gap, 2px); }
+      :where(.od-stat,.od-field,.od-cell) > :where(*) { display: block; }
+      .od-tile { display: grid; grid-template-rows: auto 1fr; }
+      :where(.od-tile) > :where(*) { display: block; }
+
+      /* media keeps its intrinsic ratio by default; never a distorted or cropped
+         cover by accident. height:auto lets the ratio win over an <img height="…">
+         attribute. Cropping to a uniform box is an explicit opt-in: set --od-ratio
+         AND add .od-media-cover together (per the core rule, only where a crop is
+         deliberate — tile thumbs, decorative fills — never on full-frame content). */
+      .od-media { display: block; width: 100%; height: auto; aspect-ratio: var(--od-ratio, auto); }
+      .od-media-cover { object-fit: cover; }
+
+      /* data text only — authored copy is rewritten to its budget instead */
+      .od-truncate { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .od-clamp-2, .od-clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+      .od-clamp-2 { -webkit-line-clamp: 2; }
+      .od-clamp-3 { -webkit-line-clamp: 3; }
+      .od-lines-2 { min-height: calc(2 * 1.4em); }   /* block-level reservation for a shared baseline */
+      .od-nowrap  { white-space: nowrap; }           /* 数字+单位 · 价格+起 · 日期+星期 */
+      .od-keep    { word-break: keep-all; overflow-wrap: anywhere; } /* CJK labels break at spaces / <wbr> first */
+
+      /* screen skeleton (optional): bars take their own space, the middle scrolls — no padding guessed for chrome */
+      .od-screen { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+      .od-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+
+      /* horizontal rail: the next item peeks at the edge; trailing room survives overflow */
+      .od-rail { display: flex; gap: var(--od-gap, 8px); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+                 padding-inline: var(--od-rail-pad, 16px); scroll-padding-inline: var(--od-rail-pad, 16px); }
+      .od-rail::-webkit-scrollbar { display: none; }
+      :where(.od-rail) > :where(*) { flex: none; scroll-snap-align: start; }
+      :where(.od-rail) > :where(:last-child) { margin-inline-end: var(--od-rail-pad, 16px); }
+
+      .od-spacer { flex: none; visibility: hidden; pointer-events: none; }
+      .od-touch  { min-width: 44px; min-height: 44px; }
+    }
+    /* /OD-LAYOUT-PRIMITIVES v1 */
+
+    @font-face {
+      font-family: "Bricolage Grotesque";
+      src: url("assets/fonts/bricolage-grotesque-latin.woff2") format("woff2");
+      font-weight: 400 800;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin.woff2") format("woff2");
+      font-weight: 400 700;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    /* ---------- Handset shell (Open Design neutral shell, kept intact) ---------- */
+    :root {
+      --phone-screen-width: 390px;
+      --phone-screen-height: 844px;
+      --phone-bezel: 10px;
+      --phone-outer-radius: 52px;
+      --phone-screen-radius: 42px;
+      --phone-safe-top: 50px;
+      --phone-safe-bottom: 29px;
+      --phone-system-fg: #17181a;
+      --phone-screen-bg: #f8f8f9;
+      --phone-stage-bg: #eaebee;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      background:
+        radial-gradient(circle at 50% 15%, rgba(255,255,255,.94), transparent 35%),
+        var(--phone-stage-bg);
+      color: #191a1d;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .phone-frame {
+      position: relative;
+      width: calc(var(--phone-screen-width) + var(--phone-bezel) * 2);
+      height: calc(var(--phone-screen-height) + var(--phone-bezel) * 2);
+      padding: var(--phone-bezel);
+      border-radius: var(--phone-outer-radius);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.2), transparent 17%),
+        linear-gradient(160deg, #3f4146 0%, #202227 48%, #0b0c0f 100%);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.13),
+        inset 0 0 0 2px rgba(0,0,0,.85),
+        0 32px 68px -20px rgba(10,12,16,.52),
+        0 10px 24px -10px rgba(10,12,16,.32);
+      isolation: isolate;
+    }
+
+    .phone-frame::before,
+    .phone-frame::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      top: 96px;
+      bottom: 96px;
+      width: 2px;
+      background: linear-gradient(to bottom, transparent, rgba(255,255,255,.13) 16%, transparent 30%, transparent 72%, rgba(255,255,255,.07) 88%, transparent);
+    }
+    .phone-frame::before { left: 0; }
+    .phone-frame::after { right: 0; }
+
+    .hardware-button {
+      position: absolute;
+      width: 4px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #08090b, #2a2d33 60%, #08090b);
+      box-shadow: inset 0 1px rgba(255,255,255,.08);
+    }
+    .hardware-button.volume { left: -3px; top: 222px; height: 86px; }
+    .hardware-button.power { right: -3px; top: 270px; height: 82px; }
+
+    .phone-screen {
+      position: relative;
+      width: var(--phone-screen-width);
+      height: var(--phone-screen-height);
+      overflow: hidden;
+      border-radius: var(--phone-screen-radius);
+      background: var(--phone-screen-bg);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+
+    .phone-content {
+      position: absolute;
+      inset: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-top: var(--phone-safe-top);
+      padding-bottom: var(--phone-safe-bottom);
+      background: var(--phone-screen-bg);
+    }
+    .phone-content::-webkit-scrollbar { display: none; }
+
+    .camera-dot {
+      position: absolute;
+      z-index: 20;
+      top: 13px;
+      left: 50%;
+      width: 10px;
+      height: 10px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 35%, #344154 0 12%, #0a0c10 34%, #000 76%);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06);
+      pointer-events: none;
+    }
+
+    .status-bar {
+      position: absolute;
+      z-index: 15;
+      inset: 0 0 auto;
+      height: var(--phone-safe-top);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr);
+      align-items: start;
+      padding: 14px 20px 0;
+      color: var(--phone-system-fg);
+      opacity: .8;
+      pointer-events: none;
+    }
+    .status-time {
+      justify-self: start;
+      display: flex;
+      align-items: center;
+      height: 15px;
+      font-size: 14px;
+      font-weight: 560;
+      line-height: 1;
+      letter-spacing: .01em;
+    }
+    .status-cutout-zone { width: 56px; }
+    .status-icons {
+      justify-self: end;
+      display: inline-flex;
+      align-items: center;
+      height: 15px;
+      gap: 6px;
+    }
+    .status-icons svg {
+      display: block;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.35;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .status-icons .connectivity { width: 15px; height: 12px; }
+    .status-icons .wifi { width: 15px; height: 12px; }
+    .status-icons .battery { width: 19px; height: 11px; }
+
+    .gesture-indicator {
+      position: absolute;
+      z-index: 20;
+      left: 50%;
+      bottom: 8px;
+      width: 96px;
+      height: 4px;
+      transform: translateX(-50%);
+      border-radius: 99px;
+      background: var(--phone-system-fg);
+      opacity: .86;
+      pointer-events: none;
+    }
+
+    /* Presentation scaling: keep the whole handset visible on short viewports. */
+    @media (max-height: 927px) { .phone-frame { zoom: 0.9; } }
+    @media (max-height: 840px) { .phone-frame { zoom: 0.82; } }
+    @media (max-height: 771px) { .phone-frame { zoom: 0.74; } }
+    @media (max-height: 702px) { .phone-frame { zoom: 0.66; } }
+    /* Narrow viewports: the handset chrome collapses and the screen fills the
+       viewport, so the app behaves like a real phone page instead of
+       scrolling sideways. */
+    @media (max-width: 480px) {
+      body { padding: 0; display: block; }
+      .phone-frame { width: 100%; height: 100dvh; padding: 0; border-radius: 0; background: none; box-shadow: none; zoom: 1; }
+      .phone-frame::before, .phone-frame::after, .hardware-button { display: none; }
+      .phone-screen { width: 100%; height: 100%; border-radius: 0; }
+    }
+
+    /* ---------- Product tokens (Artizo Sport · sideline direction) ---------- */
+    :root {
+      --c-ground: #F3F5F7;
+      --c-surface: #FFFFFF;
+      --c-ink: #0F1B2D;
+      --c-ink-muted: #55627A;
+      --c-hairline: #DDE2E9;
+      --c-control-border: #7A8698;
+      --c-track: #E4E8EE;
+      --c-navy: #0F1B2D;
+      --c-navy-raised: #22324D;
+      --c-on-navy: #FFFFFF;
+      --c-on-navy-muted: #B9C3D3;
+      --c-copper: #B4472A;
+      --c-copper-strong: #983A21;
+      --c-copper-tint: #F8E9E4;
+      --c-match: #0E7A4B;
+      --c-match-tint: #E3F3EB;
+      --c-pitch-line: rgba(255,255,255,.38);
+      --c-on-pitch-muted: #D6F0E3;
+      --c-practice: #2456C9;
+      --c-practice-tint: #E6EDFB;
+      --c-volt: #C8F23C;
+      --c-live: #FF6B5E;
+      --c-warning: #8A4B00;
+      --c-warning-fill: #C97A0A;
+      --c-warning-tint: #FDF1DC;
+      --c-danger: #B3261E;
+      --c-danger-tint: #FBE9E7;
+      --c-focus: #2456C9;
+      --c-scrim: rgba(15,27,45,.48);
+      --c-logo-tile: #F6F4E7;
+      --c-selected-bg: #0F1B2D;
+      --c-selected-fg: #FFFFFF;
+      --c-selected-muted: #B9C3D3;
+      --c-copper-text: #B4472A;
+      --c-copper-hover: #983A21;
+      --c-pitch: #0E7A4B;
+      --c-switch-on: #0E7A4B;
+      --c-bar: #0F1B2D;
+      --c-toast: #0F1B2D;
+      --c-toast-btn: rgba(255,255,255,.14);
+      --c-danger-solid: #B3261E;
+      --c-navy-raised-hover: #2E4163;
+      --c-on-navy-btn-bg: #FFFFFF;
+      --c-on-navy-btn-fg: #0F1B2D;
+      --c-on-volt: #0F1B2D;
+      --c-drop: #C8F23C;
+
+      --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+      --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --fs-13: 13px;
+      --fs-14: 14px;
+      --fs-16: 16px;
+      --fs-18: 18px;
+      --fs-22: 22px;
+      --fs-28: 28px;
+      --fs-40: 40px;
+      --lh-body: 1.5;
+      --lh-tight: 1.2;
+
+      --s-1: 4px;
+      --s-2: 8px;
+      --s-3: 12px;
+      --s-4: 16px;
+      --s-6: 24px;
+      --s-8: 32px;
+      --s-12: 48px;
+
+      --r-control: 12px;
+      --r-card: 16px;
+      --r-sheet: 24px;
+      --r-pill: 999px;
+      --touch: 44px;
+
+      --shadow-raised: 0 -6px 24px rgba(15,27,45,.12);
+      --shadow-bar: 0 -1px 0 var(--c-hairline);
+
+      --t-small: 180ms;
+      --t-enter: 300ms;
+      --t-exit: 200ms;
+      --ease-out: cubic-bezier(.2,.7,.3,1);
+      --ease-in: cubic-bezier(.5,0,.9,.4);
+
+      --phone-screen-bg: var(--c-ground);
+      --phone-system-fg: var(--c-ink);
+    }
+
+    /* Dark theme: one token set, applied through data-theme on the root. */
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --c-ground: #0B1220;
+      --c-surface: #151F30;
+      --c-ink: #EEF2F7;
+      --c-ink-muted: #A3AFC2;
+      --c-hairline: #2A374B;
+      --c-control-border: #6B7A91;
+      --c-track: #2A374B;
+      --c-navy: #1B2A42;
+      --c-navy-raised: #2B3D5C;
+      --c-navy-raised-hover: #364B70;
+      --c-copper-strong: #F0916F;
+      --c-copper-text: #F0916F;
+      --c-copper-hover: #9E3D23;
+      --c-copper-tint: #3A2019;
+      --c-match: #4CC38A;
+      --c-match-tint: #12301F;
+      --c-pitch: #0E6A42;
+      --c-switch-on: #2E9E6B;
+      --c-practice: #7FA6FF;
+      --c-practice-tint: #16264A;
+      --c-warning: #F2B24A;
+      --c-warning-fill: #F2B24A;
+      --c-warning-tint: #3A2A0E;
+      --c-danger: #FF8A80;
+      --c-danger-solid: #C4372E;
+      --c-danger-tint: #3D1714;
+      --c-focus: #C8F23C;
+      --c-scrim: rgba(0,0,0,.6);
+      --c-selected-bg: #EEF2F7;
+      --c-selected-fg: #0B1220;
+      --c-selected-muted: #44536A;
+      --c-bar: #C9D3E2;
+      --c-toast: #2B3D5C;
+      --shadow-raised: 0 -6px 24px rgba(0,0,0,.5);
+      --phone-stage-bg: #05080F;
+    }
+    :root[data-theme="dark"] body { background: var(--phone-stage-bg); }
+
+    /* Embedded presentation (board.html): no stage, handset at full size. */
+    :root.is-embed body, :root.is-embed[data-theme] body { padding: 0; background: transparent; }
+    :root.is-embed .phone-frame { zoom: 1; }
+
+    [hidden] { display: none !important; }
+    .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+    /* The app owns its own bars: the tab bar reserves the bottom safe area. */
+    .phone-content { padding-bottom: 0; overflow: hidden; }
+
+    .app {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      height: 100%;
+      font-family: var(--font-body);
+      font-size: var(--fs-16);
+      line-height: var(--lh-body);
+      color: var(--c-ink);
+      background: var(--c-ground);
+      -webkit-font-smoothing: antialiased;
+    }
+    .app h1, .app h2, .app h3, .app p, .app ul { margin: 0; }
+    .app ul { padding: 0; list-style: none; }
+    .app button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+    .app button:disabled { cursor: not-allowed; opacity: .5; }
+    .app a { color: inherit; text-decoration: none; }
+    .app :focus-visible, .sheet :focus-visible, .toast :focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
+    .on-navy :focus-visible, .toast :focus-visible { outline-color: var(--c-volt); }
+    .app h2:focus, .sheet h2:focus { outline: none; }
+
+    .screens { min-height: 0; }
+    .screen { height: 100%; }
+    .screen-bar { padding: var(--s-2) var(--s-4) var(--s-3); display: grid; gap: var(--s-3); }
+    .screen-bar h1 { font-family: var(--font-display); font-size: var(--fs-28); line-height: 1.15; font-weight: 700; letter-spacing: -.01em; }
+    .screen-kicker { font-size: var(--fs-14); color: var(--c-ink-muted); font-weight: 500; }
+    .screen-body { display: flex; flex-direction: column; gap: var(--s-6); padding-block: var(--s-1) var(--s-6); scrollbar-width: none; }
+    .screen-body::-webkit-scrollbar { display: none; }
+    .screen-body > * { flex: none; }
+    .screen-body > :not(.od-rail) { margin-inline: var(--s-4); }
+    .screen.is-entering .screen-body { animation: screen-in 200ms var(--ease-out); }
+    @keyframes screen-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    .section { display: grid; gap: var(--s-3); }
+    .section-head h2, .section > h2 { font-family: var(--font-display); font-size: var(--fs-18); line-height: var(--lh-tight); font-weight: 650; }
+    .muted { color: var(--c-ink-muted); }
+    .small { font-size: var(--fs-14); }
+
+    .icon { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-sm { width: 16px; height: 16px; stroke-width: 2; }
+
+    .card { background: var(--c-surface); border: 1px solid var(--c-hairline); border-radius: var(--r-card); padding: var(--s-4); }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: var(--touch); padding: 0 var(--s-4); border-radius: var(--r-control); font-weight: 600; font-size: var(--fs-16); white-space: nowrap; transition: transform var(--t-small) var(--ease-out); }
+    .app .btn, .sheet .btn { padding: 0 var(--s-4); }
+    .btn:active { transform: scale(.97); }
+    .btn-primary, .app .btn-primary, .sheet .btn-primary { background: var(--c-copper); color: #fff; }
+    .btn-secondary, .app .btn-secondary, .sheet .btn-secondary { background: var(--c-surface); color: var(--c-ink); border: 1px solid var(--c-control-border); }
+    .btn-volt, .app .btn-volt { background: var(--c-volt); color: var(--c-on-volt); }
+    .btn-on-navy, .app .btn-on-navy { background: var(--c-on-navy-btn-bg); color: var(--c-on-navy-btn-fg); }
+    .btn-navy-raised, .app .btn-navy-raised { background: var(--c-navy-raised); color: var(--c-on-navy); }
+    .btn-danger, .sheet .btn-danger { background: var(--c-surface); color: var(--c-danger); border: 1px solid var(--c-danger); }
+    .btn-danger-solid, .sheet .btn-danger-solid { background: var(--c-danger-solid); color: #fff; }
+    .btn-block { display: flex; width: 100%; }
+    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: var(--touch); height: var(--touch); border-radius: var(--r-control); color: var(--c-ink); }
+    .icon-btn.is-outlined, .app .icon-btn.is-outlined, .sheet .icon-btn.is-outlined { border: 1px solid var(--c-control-border); background: var(--c-surface); }
+    .link { display: inline-flex; align-items: center; min-height: var(--touch); color: var(--c-copper-text); font-weight: 600; font-size: var(--fs-14); text-decoration: underline; text-underline-offset: 3px; }
+    .app a.link { color: var(--c-copper-text); text-decoration: underline; }
+
+    /* Team switcher */
+    .team-chip { min-height: 56px; padding: var(--s-2) var(--s-4); border-radius: var(--r-control); background: var(--c-surface); border: 1px solid var(--c-hairline); align-content: center; transition: transform var(--t-small) var(--ease-out); }
+    .app .team-chip { padding: var(--s-2) var(--s-4); background: var(--c-surface); border: 1px solid var(--c-hairline); }
+    .team-chip-name { font-weight: 600; font-size: var(--fs-16); line-height: var(--lh-tight); white-space: nowrap; }
+    .team-chip-meta { font-size: var(--fs-13); color: var(--c-ink-muted); white-space: nowrap; }
+    .app .team-chip[aria-pressed="true"] { background: var(--c-selected-bg); border-color: var(--c-selected-bg); color: var(--c-selected-fg); }
+    .team-chip[aria-pressed="true"] .team-chip-meta { color: var(--c-selected-muted); }
+
+    .chip { display: inline-flex; align-items: center; min-height: var(--touch); padding: 0 var(--s-4); border-radius: var(--r-pill); font-size: var(--fs-14); font-weight: 600; white-space: nowrap; }
+    .app .chip { padding: 0 var(--s-4); background: var(--c-surface); border: 1px solid var(--c-hairline); }
+    .app .chip[aria-pressed="true"] { background: var(--c-selected-bg); border-color: var(--c-selected-bg); color: var(--c-selected-fg); }
+
+    .seg { display: flex; gap: var(--s-1); padding: var(--s-1); border-radius: var(--r-control); background: var(--c-track); }
+    .seg button { flex: 1 1 0; min-height: var(--touch); border-radius: var(--s-2); font-size: var(--fs-14); font-weight: 500; color: var(--c-ink-muted); text-align: center; }
+    .app .seg button { text-align: center; color: var(--c-ink-muted); padding: 0 var(--s-3); }
+    .app .seg button[aria-pressed="true"] { background: var(--c-surface); color: var(--c-ink); font-weight: 700; box-shadow: 0 1px 2px rgba(15,27,45,.16); }
+    .seg-compact { flex: none; }
+
+    /* Hero */
+    .hero { display: grid; gap: var(--s-3); padding: var(--s-4); border-radius: var(--r-card); background: var(--c-navy); color: var(--c-on-navy); }
+    .hero-label { font-size: var(--fs-13); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--c-on-navy-muted); }
+    .hero-title { font-family: var(--font-display); font-size: var(--fs-22); line-height: var(--lh-tight); font-weight: 700; }
+    .hero-meta { font-size: var(--fs-14); color: var(--c-on-navy-muted); }
+    .hero-clock { font-family: var(--font-display); font-size: var(--fs-22); font-weight: 700; color: var(--c-volt); font-variant-numeric: tabular-nums; }
+    .hero-score { --od-gap: 12px; }
+    .hero-team { font-weight: 600; line-height: var(--lh-tight); }
+    .hero-team.is-right { text-align: right; }
+    .hero-num { font-family: var(--font-display); font-size: var(--fs-40); line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .live-pill { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--fs-14); font-weight: 600; }
+    .live-dot { display: block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c-live); }
+    .is-running .live-dot { animation: pulse 1600ms ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .35; } }
+
+    /* Week strip */
+    .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--s-1); }
+    .day { min-height: 72px; padding: var(--s-2) 0; border-radius: var(--r-control); justify-items: center; align-content: center; text-align: center; }
+    .app .day { background: var(--c-surface); border: 1px solid var(--c-hairline); text-align: center; padding: var(--s-2) 0; }
+    .day-wd { font-size: var(--fs-13); color: var(--c-ink-muted); line-height: 1.2; }
+    .day-num { font-family: var(--font-display); font-size: var(--fs-18); font-weight: 650; line-height: 1.2; }
+    .day-marks { display: flex; gap: 2px; justify-content: center; align-items: center; min-height: 16px; }
+    .day-marks .is-match { color: var(--c-match); }
+    .day-marks .is-practice { color: var(--c-practice); }
+    .app .day.is-today { border: 2px solid var(--c-copper-text); }
+    .app .day[aria-pressed="true"] { background: var(--c-selected-bg); border-color: var(--c-selected-bg); color: var(--c-selected-fg); }
+    .day[aria-pressed="true"] .day-wd { color: var(--c-selected-muted); }
+    .day[aria-pressed="true"] .day-marks span { color: var(--c-selected-fg); }
+    .week-nav-label { font-weight: 600; text-align: center; }
+
+    /* Event rows */
+    .event-list { display: grid; gap: var(--s-2); }
+    .event-row { width: 100%; --od-gap: 12px; padding: var(--s-3); border-radius: var(--r-card); min-height: 72px; }
+    .app .event-row { background: var(--c-surface); border: 1px solid var(--c-hairline); padding: var(--s-3); }
+    .datecell { width: 48px; padding: var(--s-2) 0; border-radius: var(--r-control); background: var(--c-ground); text-align: center; }
+    .dc-mo { font-size: var(--fs-13); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--c-ink-muted); line-height: 1.2; }
+    .dc-d { font-family: var(--font-display); font-size: var(--fs-22); font-weight: 700; line-height: 1.1; }
+    .ev-tag { display: flex; align-items: center; gap: var(--s-1); font-size: var(--fs-13); font-weight: 600; line-height: 1.3; }
+    .od-field > .ev-tag, .hero > .ev-tag { display: flex; }
+    .ev-tag.is-match { color: var(--c-match); }
+    .ev-tag.is-practice { color: var(--c-practice); }
+    .ev-tag.is-live { color: var(--c-danger); gap: var(--s-2); }
+    .ev-tag.is-live .live-dot { background: var(--c-danger); }
+    .ev-title { font-weight: 600; line-height: 1.3; }
+    .ev-meta { font-size: var(--fs-14); color: var(--c-ink-muted); }
+    .chev { color: var(--c-ink-muted); width: 20px; height: 20px; }
+    .day-head { font-family: var(--font-display); font-size: var(--fs-16); font-weight: 650; }
+    .day-head-today { font-family: var(--font-body); font-size: var(--fs-13); font-weight: 600; color: var(--c-copper-text); }
+
+    /* Empty state */
+    .empty { display: grid; gap: var(--s-3); justify-items: start; padding: var(--s-6) var(--s-4); border-radius: var(--r-card); background: var(--c-surface); border: 1px dashed var(--c-control-border); }
+    .empty h2, .empty h3 { font-family: var(--font-display); font-size: var(--fs-18); font-weight: 650; line-height: var(--lh-tight); }
+    .empty-actions { --od-gap: 8px; }
+
+    /* Stats */
+    .stat { padding: var(--s-3); border-radius: var(--r-control); background: var(--c-surface); border: 1px solid var(--c-hairline); }
+    .stat-num { font-family: var(--font-display); font-size: var(--fs-22); font-weight: 700; line-height: 1.15; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .stat-cap { font-size: var(--fs-13); color: var(--c-ink-muted); line-height: 1.3; }
+
+    /* Gameday */
+    .scorebar { margin: 0 var(--s-4) var(--s-3); padding: var(--s-3) var(--s-4) var(--s-4); border-radius: var(--r-card); background: var(--c-navy); color: var(--c-on-navy); display: grid; gap: var(--s-3); }
+    .sb-meta { font-size: var(--fs-13); color: var(--c-on-navy-muted); }
+    .sb-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--s-3); align-items: start; }
+    .sb-team { --od-gap: 4px; justify-items: start; }
+    .sb-team.is-right { justify-items: end; text-align: right; }
+    .sb-name { font-size: var(--fs-14); font-weight: 600; line-height: 1.25; min-height: calc(2 * 1.25em); }
+    .sb-score { font-family: var(--font-display); font-size: var(--fs-40); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+    .sb-clock { display: grid; gap: var(--s-1); justify-items: center; }
+    .clock { display: block; min-width: 5ch; text-align: center; font-family: var(--font-display); font-size: var(--fs-40); font-weight: 700; line-height: 1; color: var(--c-volt); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .clock-btn { display: grid; place-items: center; width: var(--touch); height: var(--touch); border-radius: 50%; }
+    .app .clock-btn { background: var(--c-volt); color: var(--c-navy); }
+    .clock-state { display: block; font-size: var(--fs-13); color: var(--c-on-navy-muted); white-space: nowrap; }
+    .app .goal-btn { font-size: var(--fs-14); padding: 0 var(--s-3); gap: var(--s-1); }
+
+    .fair { display: grid; gap: var(--s-3); }
+    .fair h2 { font-family: var(--font-display); font-size: var(--fs-18); font-weight: 650; line-height: var(--lh-tight); }
+    .suggest { --od-gap: 12px; padding: var(--s-3); border-radius: var(--r-control); background: var(--c-copper-tint); }
+    .suggest-label { font-size: var(--fs-13); font-weight: 600; color: var(--c-copper-strong); }
+    .suggest-text { font-weight: 600; line-height: 1.3; }
+    .balanced { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3); border-radius: var(--r-control); background: var(--c-match-tint); color: var(--c-match); font-weight: 600; font-size: var(--fs-14); }
+
+    .pitch { position: relative; display: grid; gap: var(--s-3); padding: var(--s-6) var(--s-3) var(--s-4); border-radius: var(--r-card); background: var(--c-pitch); color: #fff; }
+    .pitch-lines { position: absolute; inset: 8px; border: 2px solid var(--c-pitch-line); border-radius: 8px; pointer-events: none; }
+    .pitch-arc { position: absolute; top: 8px; left: 50%; width: 96px; height: 48px; transform: translateX(-50%); border: 2px solid var(--c-pitch-line); border-top: 0; border-radius: 0 0 48px 48px; pointer-events: none; }
+    .pitch-box { position: absolute; bottom: 8px; left: 50%; width: 56%; height: 92px; transform: translateX(-50%); border: 2px solid var(--c-pitch-line); border-bottom: 0; pointer-events: none; }
+    .pitch-row { position: relative; display: flex; justify-content: space-around; }
+    .token { width: 96px; padding: var(--s-1); border-radius: var(--r-control); justify-items: center; text-align: center; --od-gap: 2px; }
+    .app .token { text-align: center; color: #fff; padding: var(--s-1); }
+    .token-num { display: grid; place-items: center; width: var(--touch); height: var(--touch); border-radius: 50%; background: #fff; color: var(--c-navy); font-family: var(--font-display); font-size: var(--fs-18); font-weight: 700; transition: transform var(--t-small) var(--ease-out); }
+    .token.is-rest .token-num { box-shadow: 0 0 0 3px var(--c-volt); }
+    .token-name { font-size: var(--fs-14); font-weight: 600; line-height: 1.25; }
+    .token-min { font-size: var(--fs-13); color: var(--c-on-pitch-muted); line-height: 1.25; }
+    .pitch :focus-visible { outline-color: var(--c-volt); }
+
+    .player-list { display: grid; gap: var(--s-2); }
+    .prow { --od-gap: 12px; padding: var(--s-3); border-radius: var(--r-card); background: var(--c-surface); border: 1px solid var(--c-hairline); }
+    .prow-num { width: 28px; font-family: var(--font-display); font-size: var(--fs-18); font-weight: 700; text-align: center; }
+    .prow-body { --od-gap: 4px; }
+    .prow-name { font-weight: 600; line-height: 1.3; }
+    .prow-pos { font-weight: 400; color: var(--c-ink-muted); font-size: var(--fs-14); }
+    .prow-min { font-size: var(--fs-14); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bar { display: block; height: 8px; border-radius: var(--r-pill); background: var(--c-track); overflow: hidden; }
+    .bar-fill { display: block; height: 100%; border-radius: var(--r-pill); background: var(--c-bar); transform-origin: left center; transition: transform var(--t-enter) var(--ease-out); }
+    .bar.is-due .bar-fill, .bar.is-rest .bar-fill { background: var(--c-warning-fill); }
+    .pstatus { display: flex; align-items: center; gap: var(--s-1); font-size: var(--fs-13); font-weight: 600; color: var(--c-ink-muted); line-height: 1.3; }
+    .od-field > .pstatus { display: flex; }
+    .pstatus.is-due, .pstatus.is-rest { color: var(--c-warning); }
+    .pstatus.is-ok { color: var(--c-match); }
+    .pstatus.is-out { color: var(--c-danger); }
+    .app .btn-sm, .sheet .btn-sm { font-size: var(--fs-14); padding: 0 var(--s-3); }
+
+    /* Practice */
+    .next-practice { display: grid; gap: var(--s-1); }
+    .block-list { display: grid; gap: var(--s-2); }
+    .block { --od-gap: 8px; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3); border-radius: var(--r-card); background: var(--c-surface); border: 1px solid var(--c-hairline); }
+    .block-time { width: 56px; --od-gap: 0px; }
+    .block-start { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-16); font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.3; }
+    .block-dur { font-size: var(--fs-13); color: var(--c-ink-muted); white-space: nowrap; line-height: 1.3; }
+    .block-body { min-height: var(--touch); align-content: center; border-radius: var(--s-2); --od-gap: 0px; }
+    .block-cat { font-size: var(--fs-13); font-weight: 600; color: var(--c-ink-muted); line-height: 1.3; }
+    .block-title { font-weight: 600; line-height: 1.3; }
+    .plan-status { font-size: var(--fs-14); font-weight: 600; }
+    .plan-status.is-ok { color: var(--c-match); }
+    .plan-status.is-off { color: var(--c-warning); }
+
+    /* Team */
+    .roster-row { width: 100%; --od-gap: 12px; padding: var(--s-3); border-radius: var(--r-card); min-height: 64px; }
+    .app .roster-row { background: var(--c-surface); border: 1px solid var(--c-hairline); padding: var(--s-3); }
+    .jersey { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--c-navy-raised); color: var(--c-on-navy); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-16); }
+    .jersey.is-lg { width: 56px; height: 56px; font-size: var(--fs-22); }
+    .brand-foot { display: grid; gap: var(--s-2); justify-items: center; padding: var(--s-4) 0 0; text-align: center; }
+    .brand-tile { width: 148px; padding: var(--s-3); border-radius: var(--r-card); background: var(--c-logo-tile); }
+
+    /* Tab bar */
+    .tabbar { display: flex; padding: var(--s-1) var(--s-2) var(--phone-safe-bottom); background: var(--c-surface); box-shadow: var(--shadow-bar); }
+    .tabbar a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; border-radius: var(--r-control); color: var(--c-ink-muted); }
+    .app .tabbar a { color: var(--c-ink-muted); }
+    .tab-icon { position: relative; display: block; height: 24px; }
+    .tab-label { font-size: var(--fs-13); font-weight: 500; line-height: 1.2; }
+    .app .tabbar a[aria-current="page"] { color: var(--c-copper-text); background: var(--c-copper-tint); }
+    .tabbar a[aria-current="page"] .tab-label { font-weight: 700; }
+    .tab-live { position: absolute; top: -2px; right: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--c-danger); border: 2px solid var(--c-surface); }
+    .tabbar a[aria-current="page"] .tab-live { border-color: var(--c-copper-tint); }
+
+    /* Sheets and toast (mounted in the handset screen) */
+    .sheet-layer { position: absolute; inset: 0; z-index: 12; display: flex; flex-direction: column; justify-content: flex-end; font-family: var(--font-body); font-size: var(--fs-16); line-height: var(--lh-body); color: var(--c-ink); }
+    .scrim { position: absolute; inset: 0; background: var(--c-scrim); opacity: 0; transition: opacity var(--t-exit) var(--ease-in); }
+    .sheet { position: relative; max-height: 84%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: grid; gap: var(--s-4); padding: var(--s-4) var(--s-4) calc(var(--phone-safe-bottom) + var(--s-4)); border-radius: var(--r-sheet) var(--r-sheet) 0 0; background: var(--c-surface); box-shadow: var(--shadow-raised); transform: translateY(100%); transition: transform var(--t-exit) var(--ease-in); }
+    .sheet::-webkit-scrollbar { display: none; }
+    .sheet-layer.is-open .scrim { opacity: 1; transition: opacity var(--t-enter) var(--ease-out); }
+    .sheet-layer.is-open .sheet { transform: none; transition: transform var(--t-enter) var(--ease-out); }
+    .sheet h2, .sheet h3, .sheet p, .sheet ul { margin: 0; }
+    .sheet button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+    .sheet button:disabled { cursor: not-allowed; opacity: .5; }
+    .sheet a { text-decoration: none; }
+    .sheet h2 { font-family: var(--font-display); font-size: var(--fs-22); font-weight: 700; line-height: var(--lh-tight); }
+    .sheet h3 { font-size: var(--fs-14); font-weight: 700; }
+    .sheet-head { --od-gap: 12px; }
+    .sheet-actions { display: grid; gap: var(--s-2); }
+    .sheet-actions.is-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .detail-row { --od-gap: 12px; }
+    .detail-row .icon { margin-top: 2px; color: var(--c-ink-muted); }
+    .detail-main { font-weight: 600; line-height: 1.35; }
+    .pick-list { display: grid; gap: var(--s-2); padding: 0; list-style: none; }
+    .pick { width: 100%; --od-gap: 12px; min-height: 60px; padding: var(--s-2) var(--s-3); border-radius: var(--r-control); }
+    .sheet .pick { border: 1px solid var(--c-hairline); padding: var(--s-2) var(--s-3); }
+    .pick-badge { font-size: var(--fs-13); font-weight: 600; color: var(--c-copper-strong); background: var(--c-copper-tint); padding: 2px var(--s-2); border-radius: var(--r-pill); white-space: nowrap; }
+    .points { display: grid; gap: var(--s-1); padding-left: var(--s-4); list-style: disc; }
+    .sheet ul.points { padding-left: 20px; list-style: disc; }
+    .stepper { --od-gap: 12px; }
+    .stepper-val { min-width: 72px; text-align: center; font-family: var(--font-display); font-size: var(--fs-22); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .confirm { display: grid; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-control); background: var(--c-danger-tint); }
+
+    .switch-row { --od-gap: 12px; padding: var(--s-3); border-radius: var(--r-control); border: 1px solid var(--c-hairline); }
+    .switch { position: relative; display: block; width: 52px; height: 32px; border-radius: var(--r-pill); background: var(--c-control-border); transition: background-color var(--t-small) var(--ease-out); }
+    .sheet .switch { background: var(--c-control-border); }
+    .switch-knob { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform var(--t-small) var(--ease-out); }
+    .sheet .switch[aria-checked="true"] { background: var(--c-switch-on); }
+    .switch[aria-checked="true"] .switch-knob { transform: translateX(20px); }
+    .switch-tap { display: grid; place-items: center; min-width: 52px; min-height: var(--touch); }
+
+    /* Forms */
+    .form { display: grid; gap: var(--s-4); }
+    .field { display: grid; gap: var(--s-1); }
+    .field label, .field legend { font-size: var(--fs-14); font-weight: 600; padding: 0; }
+    .req { font-weight: 400; color: var(--c-ink-muted); }
+    .field input, .field select { width: 100%; min-height: 48px; padding: 0 var(--s-3); border-radius: var(--r-control); border: 1px solid var(--c-control-border); background: var(--c-surface); color: var(--c-ink); font: inherit; font-size: var(--fs-16); }
+    .field input[aria-invalid="true"] { border: 2px solid var(--c-danger); }
+    .field-err { display: flex; gap: var(--s-1); align-items: flex-start; font-size: var(--fs-14); color: var(--c-danger); font-weight: 500; }
+    .field-err .icon { margin-top: 2px; }
+    .field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+    fieldset.field { border: 0; margin: 0; padding: 0; min-width: 0; }
+    .radio-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+    .radio-seg label { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-3); border-radius: var(--r-control); border: 1px solid var(--c-control-border); font-size: var(--fs-16); font-weight: 500; cursor: pointer; }
+    .radio-seg input { width: 20px; min-height: 0; height: 20px; margin: 0; accent-color: var(--c-copper); }
+    .radio-seg label:has(input:checked) { border: 2px solid var(--c-ink); font-weight: 600; }
+    .err-summary { display: grid; gap: var(--s-1); padding: var(--s-3); border-radius: var(--r-control); background: var(--c-danger-tint); color: var(--c-danger); font-size: var(--fs-14); }
+    .err-summary strong { font-weight: 700; }
+    .sheet .err-link { min-height: var(--touch); display: flex; align-items: center; text-decoration: underline; text-underline-offset: 3px; color: var(--c-danger); font-weight: 600; }
+
+    .toast { position: absolute; z-index: 14; left: var(--s-4); right: var(--s-4); bottom: calc(var(--phone-safe-bottom) + 72px); display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); min-height: 52px; border-radius: var(--r-control); background: var(--c-toast); color: var(--c-on-navy); font-family: var(--font-body); font-size: var(--fs-14); font-weight: 500; line-height: 1.35; box-shadow: 0 8px 24px rgba(15,27,45,.28); animation: toast-in 240ms var(--ease-out); }
+    .toast-msg { flex: 1 1 0; min-width: 0; padding-block: var(--s-1); }
+    .toast button { flex: none; min-height: var(--touch); padding: 0 var(--s-3); border: 0; border-radius: var(--s-2); background: var(--c-toast-btn); color: var(--c-volt); font: inherit; font-weight: 700; cursor: pointer; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+    /* Lineup builder (pre-match) */
+    .screen-foot { padding: var(--s-3) var(--s-4); background: var(--c-ground); box-shadow: var(--shadow-bar); }
+    .slot { width: 96px; border-radius: var(--r-control); justify-items: center; --od-gap: 2px; transition: transform var(--t-small) var(--ease-out); }
+    .app .slot { padding: var(--s-1); color: #fff; text-align: center; }
+    .slot .token-num, .slot-ring { width: 56px; height: 56px; font-size: var(--fs-22); }
+    .slot-ring { display: grid; place-items: center; border-radius: 50%; border: 2px dashed rgba(255,255,255,.75); }
+    .slot[aria-pressed="true"] .token-num, .slot.is-drop .token-num, .slot.is-drop .slot-ring { box-shadow: 0 0 0 4px var(--c-drop); }
+    .slot.is-drop { transform: scale(1.06); }
+    .bench-tray { display: grid; gap: var(--s-2); padding: var(--s-2); border-radius: var(--r-card); border: 1px dashed var(--c-control-border); }
+    .bench-tray.is-drop { outline: 2px dashed var(--c-copper-text); outline-offset: -1px; background: var(--c-copper-tint); }
+    .bench-chip { --od-gap: 8px; min-height: 52px; border-radius: var(--r-control); transition: transform var(--t-small) var(--ease-out); }
+    .app .bench-chip { padding: var(--s-1) var(--s-2); background: var(--c-surface); border: 1px solid var(--c-hairline); }
+    .bench-num { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--c-navy-raised); color: var(--c-on-navy); font-family: var(--font-display); font-size: var(--fs-14); font-weight: 700; }
+    .bench-name { font-size: var(--fs-14); font-weight: 600; line-height: 1.25; }
+    .bench-pos { font-size: var(--fs-13); color: var(--c-ink-muted); line-height: 1.25; }
+    .app .bench-chip[aria-pressed="true"] { background: var(--c-selected-bg); border-color: var(--c-selected-bg); color: var(--c-selected-fg); }
+    .bench-chip[aria-pressed="true"] .bench-pos { color: var(--c-selected-muted); }
+    .app [data-drag] { touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+    .app .is-dragging { position: relative; z-index: 5; pointer-events: none; transition: none; cursor: grabbing; }
+    .is-dragging .token-num, .bench-chip.is-dragging { box-shadow: 0 12px 24px rgba(0,0,0,.35); }
+    .sheet .pick[aria-checked="true"] { border: 2px solid var(--c-ink); }
+
+    .summary-line { font-size: var(--fs-14); line-height: var(--lh-body); font-weight: 600; color: var(--c-ink-muted); }
+
+    @media (hover: hover) {
+      .app .bench-chip:not([aria-pressed="true"]):hover { border-color: var(--c-ink); }
+      .btn-primary:hover { background: var(--c-copper-hover); }
+      .app .btn-secondary:hover, .sheet .btn-secondary:hover, .app .icon-btn.is-outlined:hover, .sheet .icon-btn.is-outlined:hover { border-color: var(--c-ink); box-shadow: inset 0 0 0 1px var(--c-ink); }
+      .app .event-row:hover, .app .roster-row:hover, .app .team-chip:not([aria-pressed="true"]):hover, .app .chip:not([aria-pressed="true"]):hover, .app .day:not([aria-pressed="true"]):hover, .sheet .pick:hover { border-color: var(--c-ink); }
+      .app .tabbar a:not([aria-current="page"]):hover { color: var(--c-ink); background: var(--c-ground); }
+      .block-body:hover .block-title, .app a.link:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+      .app .clock-btn:hover { background: #fff; }
+      .app .btn-navy-raised:hover { background: var(--c-navy-raised-hover); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
+    <symbol id="i-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 4.3 3.1-1.6 5H9.3l-1.6-5z"/><path d="M12 3v4.5M3.5 9.5l4.2 1.1M20.5 9.5l-4.2 1.1M6.7 19.3l2.6-3.7M17.3 19.3l-2.6-3.7"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="8" y="2.5" width="8" height="4" rx="1"/><path d="M16 4.5h2a2 2 0 0 1 2 2V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h2M9 12h6M9 16h4"/></symbol>
+    <symbol id="i-cone" viewBox="0 0 24 24"><path d="M10.2 4h3.6l4.2 14H6zM4 20.5h16M8.3 12h7.4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+    <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+    <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 4 4 8l4 4M4 8h16M16 12l4 4-4 4M20 16H4"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.5 20h19zM12 10v4.5M12 17.5v.01"/></symbol>
+    <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></symbol>
+    <symbol id="i-nav" viewBox="0 0 24 24"><path d="M21 3 3 10.5l7.5 3L13.5 21z"/></symbol>
+    <symbol id="i-contrast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
+  </svg>
+
+  <div class="phone-frame" data-phone-shell data-platform="neutral">
+    <span class="hardware-button volume" aria-hidden="true"></span>
+    <span class="hardware-button power" aria-hidden="true"></span>
+
+    <section class="phone-screen" data-phone-screen>
+      <main class="phone-content" data-phone-content>
+        <!-- APP CONTENT START -->
+        <div class="app" id="app">
+          <div class="screens">
+            <section class="screen od-screen" id="screen-home" aria-label="Home" hidden>
+              <header class="screen-bar" id="bar-home"></header>
+              <div class="od-scroll screen-body" id="body-home"></div>
+            </section>
+            <section class="screen od-screen" id="screen-calendar" aria-label="Calendar" hidden>
+              <header class="screen-bar" id="bar-calendar"></header>
+              <div class="od-scroll screen-body" id="body-calendar"></div>
+            </section>
+            <section class="screen od-screen" id="screen-gameday" aria-label="Gameday" hidden>
+              <header class="on-navy" id="bar-gameday"></header>
+              <div class="od-scroll screen-body" id="body-gameday"></div>
+              <footer class="screen-foot" id="foot-gameday" hidden></footer>
+            </section>
+            <section class="screen od-screen" id="screen-practice" aria-label="Practice" hidden>
+              <header class="screen-bar" id="bar-practice"></header>
+              <div class="od-scroll screen-body" id="body-practice"></div>
+            </section>
+            <section class="screen od-screen" id="screen-team" aria-label="Team" hidden>
+              <header class="screen-bar" id="bar-team"></header>
+              <div class="od-scroll screen-body" id="body-team"></div>
+            </section>
+            <noscript><p style="padding:16px">This prototype needs JavaScript turned on to show its screens.</p></noscript>
+          </div>
+
+          <p class="vh" id="srStatus" role="status" aria-live="polite"></p>
+          <nav class="tabbar" aria-label="Main">
+            <a href="#/home" data-tab="home">
+              <span class="tab-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-home"/></svg></span>
+              <span class="tab-label">Home</span>
+            </a>
+            <a href="#/calendar" data-tab="calendar">
+              <span class="tab-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-calendar"/></svg></span>
+              <span class="tab-label">Calendar</span>
+            </a>
+            <a href="#/gameday" data-tab="gameday">
+              <span class="tab-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-ball"/></svg><span class="tab-live" id="tabLive" aria-hidden="true"></span></span>
+              <span class="tab-label">Gameday<span class="vh" id="tabLiveText">, match live</span></span>
+            </a>
+            <a href="#/practice" data-tab="practice">
+              <span class="tab-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-clipboard"/></svg></span>
+              <span class="tab-label">Practice</span>
+            </a>
+            <a href="#/team" data-tab="team">
+              <span class="tab-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-users"/></svg></span>
+              <span class="tab-label">Team</span>
+            </a>
+          </nav>
+        </div>
+        <!-- APP CONTENT END -->
+      </main>
+
+      <div class="sheet-layer" id="sheetLayer" hidden>
+        <div class="scrim" data-action="close"></div>
+        <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"></div>
+      </div>
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+      <div class="status-bar" aria-hidden="true">
+        <span class="status-time">10:25</span>
+        <span class="status-cutout-zone"></span>
+        <span class="status-icons">
+          <svg class="connectivity" viewBox="0 0 15 12"><path d="M1.5 10.5v-2m4 2v-4.5m4 4.5v-7m4 7v-9"/></svg>
+          <svg class="wifi" viewBox="0 0 16 12"><path d="M1.5 4.7a9.2 9.2 0 0 1 13 0M4.2 7.3a5.4 5.4 0 0 1 7.6 0M6.9 10a1.55 1.55 0 0 1 2.2 0"/></svg>
+          <svg class="battery" viewBox="0 0 20 11"><rect x=".75" y="1.25" width="16.5" height="8.5" rx="2"/><path d="M18.5 4v3M3.2 3.4h10.4v4.2H3.2z" fill="currentColor" stroke="none"/></svg>
+        </span>
+      </div>
+      <div class="camera-dot" aria-hidden="true"></div>
+      <div class="gesture-indicator" aria-hidden="true"></div>
+    </section>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ---------- helpers ---------- */
+    const $ = (s, r) => (r || document).querySelector(s);
+    const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const icon = (n, cls) => '<svg class="icon ' + (cls || '') + '" aria-hidden="true" focusable="false"><use href="#i-' + n + '"/></svg>';
+    const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+
+    const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const WDL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const toDate = iso => { const p = iso.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+    const pad = n => String(n).padStart(2, '0');
+    const toISO = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    const addDays = (iso, n) => { const d = toDate(iso); d.setDate(d.getDate() + n); return toISO(d); };
+    const weekStart = iso => addDays(iso, -((toDate(iso).getDay() + 6) % 7));
+    const fmtDay = iso => { const d = toDate(iso); return WD[d.getDay()] + ', ' + MO[d.getMonth()] + ' ' + d.getDate(); };
+    const fmtShort = iso => { const d = toDate(iso); return MO[d.getMonth()] + ' ' + d.getDate(); };
+    const fmtTime = t => { if (!t) return ''; const p = t.split(':').map(Number); const ap = p[0] >= 12 ? 'PM' : 'AM'; return (p[0] % 12 || 12) + ':' + pad(p[1]) + ' ' + ap; };
+    const addMin = (t, m) => { const p = t.split(':').map(Number); const total = p[0] * 60 + p[1] + m; return pad(Math.floor(total / 60) % 24) + ':' + pad(total % 60); };
+    const fmtClock = s => pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+    const mins = s => Math.floor(s / 60);
+
+    /* ---------- appearance ---------- */
+    const mqDark = window.matchMedia('(prefers-color-scheme: dark)');
+    const themeStore = {
+      get: () => { try { return localStorage.getItem('artizo-theme'); } catch (e) { return null; } },
+      set: v => { try { localStorage.setItem('artizo-theme', v); } catch (e) {} }
+    };
+    const okTheme = v => (['system', 'light', 'dark'].indexOf(v) >= 0 ? v : null);
+    let themePref = okTheme(new URLSearchParams(location.search).get('theme')) || okTheme(themeStore.get()) || 'system';
+    function applyTheme() { document.documentElement.dataset.theme = themePref === 'system' ? (mqDark.matches ? 'dark' : 'light') : themePref; }
+    mqDark.addEventListener('change', applyTheme);
+    applyTheme();
+
+    /* ---------- demo data (teams, venues, opponents from the coach's own schedule) ---------- */
+    const TODAY = '2026-10-03';
+    const HALF = 25 * 60;
+    const ON_FIELD = 7;
+    const SESSION_MIN = 60;
+    const POS = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' };
+
+    const TEAMS = [
+      { id: 'stars', name: 'Shooting Stars', format: '7v7', age: 'U9G' },
+      { id: 'giovanni', name: 'Giovanni · U7', format: '4v4', age: 'U7' },
+      { id: 'olivia', name: 'Olivia · U9', format: '7v7', age: 'U9' },
+      { id: 'reference', name: 'Reference · U14', format: '11v11', age: 'U14' }
+    ];
+
+    const mk = (prefix, names) => names.map((nm, i) => ({ id: prefix + (i + 1), n: i + 1, name: nm, pos: ['GK', 'DEF', 'DEF', 'MID', 'MID', 'FWD'][i % 6], sec: 0, goals: 0, out: false }));
+    const ROSTERS = {
+      stars: [
+        { id: 's1', n: 1, name: 'Nora B.', pos: 'GK', sec: 0, goals: 0, out: false },
+        { id: 's2', n: 2, name: 'Ella J.', pos: 'DEF', sec: 0, goals: 0, out: true },
+        { id: 's3', n: 3, name: 'Lily H.', pos: 'DEF', sec: 0, goals: 0, out: false },
+        { id: 's4', n: 4, name: 'Maya R.', pos: 'DEF', sec: 0, goals: 0, out: false },
+        { id: 's5', n: 5, name: 'Ava T.', pos: 'DEF', sec: 0, goals: 0, out: false },
+        { id: 's6', n: 6, name: 'Isla M.', pos: 'MID', sec: 0, goals: 0, out: false },
+        { id: 's7', n: 7, name: 'Emma K.', pos: 'MID', sec: 0, goals: 0, out: false },
+        { id: 's8', n: 8, name: 'Sofia L.', pos: 'MID', sec: 0, goals: 0, out: false },
+        { id: 's9', n: 9, name: 'Zoe P.', pos: 'FWD', sec: 0, goals: 0, out: false },
+        { id: 's10', n: 10, name: 'Chloe V.', pos: 'MID', sec: 0, goals: 0, out: false },
+        { id: 's11', n: 11, name: 'Ruby S.', pos: 'FWD', sec: 0, goals: 0, out: false },
+        { id: 's12', n: 12, name: 'Mila D.', pos: 'MID', sec: 0, goals: 0, out: false }
+      ],
+      giovanni: mk('g', ['Giovanni S.', 'Leo C.', 'Mateo G.', 'Noah W.', 'Eli F.', 'Lucas A.', 'Owen N.', 'Jack B.', 'Theo R.']),
+      olivia: mk('o', ['Olivia S.', 'Harper D.', 'Aria N.', 'Luna G.', 'Ivy C.', 'Stella W.', 'Hazel F.', 'Violet A.', 'Elena Q.', 'Cora Y.', 'Piper O.', 'June E.']),
+      reference: []
+    };
+
+    const TWIN_OAKS = { venue: 'Twin Oaks Park – Field 5', address: '5500 Park Drive, Rocklin, CA 95765' };
+    const RUHKALA = { venue: 'Ruhkala Park', address: '2160 Arnold Drive, Rocklin, CA 95765' };
+    const EVENTS = [
+      Object.assign({ id: 'e7', team: 'giovanni', type: 'match', date: '2026-09-22', time: '18:42', opp: 'TBD', oppFrom: '', venue: '', address: '' }),
+      Object.assign({ id: 'e1', team: 'stars', type: 'practice', date: '2026-09-24', time: '17:00' }, TWIN_OAKS),
+      Object.assign({ id: 'e2', team: 'stars', type: 'match', date: '2026-09-26', time: '10:40', opp: 'Pink Pandas', oppFrom: 'Granite Bay', score: [3, 1] }, RUHKALA),
+      Object.assign({ id: 'e3', team: 'stars', type: 'practice', date: '2026-09-29', time: '17:00' }, TWIN_OAKS),
+      Object.assign({ id: 'e4', team: 'stars', type: 'practice', date: '2026-10-01', time: '17:00' }, TWIN_OAKS),
+      Object.assign({ id: 'e5', team: 'stars', type: 'match', date: '2026-10-03', time: '10:40', opp: 'Pink Diamonds', oppFrom: 'Lincoln', today: true }, RUHKALA),
+      Object.assign({ id: 'e6', team: 'stars', type: 'practice', date: '2026-10-06', time: '17:00' }, TWIN_OAKS)
+    ];
+
+    const DRILLS = {
+      sharks: { title: 'Sharks and minnows', cat: 'Warm-up', min: 10, desc: 'Minnows dribble across the grid while the sharks try to knock their ball out.', setup: '20 × 25 yard grid, a ball for every minnow, two sharks to start.', points: ['Keep the ball close with small touches', 'Head up to spot open space', 'Change speed after a turn'] },
+      gates: { title: 'Passing gates', cat: 'Skill', min: 10, desc: 'Pairs score a point for every pass through a cone gate in 60 seconds.', setup: 'Eight to ten cone gates across half the field, one ball per pair.', points: ['Inside of the foot, toe up', 'Move to a new gate after each pass', 'Call for the ball'] },
+      rondo: { title: 'Rondo 4v1', cat: 'Skill', min: 15, desc: 'Four players keep the ball away from one defender inside a square.', setup: '8 × 8 yard square. Rotate the defender every 45 seconds.', points: ['Open your body to see two options', 'Two touches at most', 'Pass, then shift to give an angle'] },
+      ssg: { title: '3v3 small-sided game', cat: 'Game', min: 20, desc: 'Two small fields, quick games, winners stay on.', setup: 'Two 25 × 20 yard fields with pop-up goals, four-minute games.', points: ['Let them play and coach in the breaks', 'Praise passes that find a teammate', 'Everyone rotates through both fields'] },
+      cool: { title: 'Stretch and team talk', cat: 'Cool-down', min: 5, desc: 'Easy stretches in a circle while each player shares one thing that went well.', setup: 'Circle up at midfield.', points: ['One highlight from each player', 'Remind everyone when the next match is'] },
+      oneVone: { title: '1v1 to goal', cat: 'Skill', min: 10, desc: 'Attacker and defender race to a served ball and play to a small goal.', setup: 'Two lines either side of a pop-up goal, coach serves from the middle.', points: ['Attack the defender at speed', 'Defenders stay side-on and patient'] },
+      redlight: { title: 'Red light, green light', cat: 'Warm-up', min: 5, desc: 'Players dribble on green and stop the ball dead on red.', setup: 'Everyone on the end line with a ball.', points: ['Sole of the foot to stop', 'Small touches so the ball stays close'] },
+      relay: { title: 'Dribble relay', cat: 'Skill', min: 10, desc: 'Teams race through a cone slalom and back.', setup: 'Three lines of five cones, two yards apart.', points: ['Use both feet', 'Look up between cones'] },
+      worldcup: { title: 'World Cup scrimmage', cat: 'Game', min: 15, desc: 'Pairs play every team for themselves at one goal; scoring pairs go through.', setup: 'One full-size goal with a keeper, players in pairs.', points: ['Shoot early', 'Follow every rebound'] },
+      water: { title: 'Water break', cat: 'Break', min: 5, desc: 'Drinks and a quick reset before the next block.', setup: 'Bottles by the bench.', points: ['Two minutes, then straight back in'] }
+    };
+    let uid = 0;
+    const planItem = key => Object.assign({ uid: 'b' + (++uid), key: key }, DRILLS[key]);
+
+    /* ---------- state ---------- */
+    const state = {
+      route: 'home',
+      team: 'stars',
+      scroll: {},
+      cal: { week: weekStart(TODAY), day: null, team: 'all', type: 'all' },
+      rosterFilter: 'all',
+      pick: null,
+      gd: {
+        phase: 'pre', running: false, sec: 0, us: 0, them: 0, view: 'pitch', formation: '2-3-1',
+        slots: [
+          { pos: 'GK', pid: 's1' }, { pos: 'DEF', pid: 's4' }, { pos: 'DEF', pid: 's5' },
+          { pos: 'MID', pid: 's8' }, { pos: 'MID', pid: 's10' }, { pos: 'MID', pid: null }, { pos: 'FWD', pid: null }
+        ],
+        bench: ['s3', 's6', 's7', 's9', 's11', 's12']
+      },
+      plan: ['sharks', 'gates', 'rondo', 'ssg', 'cool'].map(planItem)
+    };
+
+    const teamById = id => TEAMS.find(t => t.id === id);
+    const curTeam = () => teamById(state.team);
+    const roster = id => ROSTERS[id || state.team];
+    const starById = id => ROSTERS.stars.find(p => p.id === id);
+    const firstName = p => p.name.split(' ')[0];
+    const teamMeta = t => t.format + ' · ' + plural(roster(t.id).length, 'player', 'players');
+
+    const matchOver = () => state.gd.phase === 'ft';
+    const matchLive = () => ['live1', 'ht', 'live2'].indexOf(state.gd.phase) >= 0;
+    const isLive = e => !!e.today && matchLive();
+    const isPre = e => !!e.today && state.gd.phase === 'pre';
+    const filledCount = () => state.gd.slots.filter(x => x.pid).length;
+    const slotIndexOf = id => state.gd.slots.findIndex(x => x.pid === id);
+    const num = p => (p.n == null ? '–' : p.n);
+    const pitchRows = () => ['FWD', 'MID', 'DEF', 'GK'].map(pos => state.gd.slots.map((x, i) => (x.pos === pos ? i : -1)).filter(i => i >= 0)).filter(r => r.length);
+    const isPast = e => e.date < TODAY || (!!e.today && matchOver());
+    const evSort = (a, b) => (a.date + a.time).localeCompare(b.date + b.time);
+    const evTitle = e => e.type === 'match' ? 'vs ' + e.opp + (e.oppFrom ? ' (' + e.oppFrom + ')' : '') : 'Practice';
+    const evScore = e => e.today ? [state.gd.us, state.gd.them] : e.score;
+    const resultText = s => (s[0] > s[1] ? 'W' : s[0] < s[1] ? 'L' : 'D') + ' ' + s[0] + '–' + s[1];
+    const phaseLabel = () => ({ pre: 'Pre-match', live1: '1st half', ht: 'Half time', live2: '2nd half', ft: 'Full time' }[state.gd.phase]);
+    const clockState = () => state.gd.phase === 'ft' ? 'Final' : state.gd.phase === 'ht' ? 'Start 2nd half' : state.gd.running ? 'Running' : 'Paused';
+
+    /* ---------- fair play ---------- */
+    function fair() {
+      const g = state.gd;
+      const avail = ROSTERS.stars.filter(p => !p.out);
+      const n = Math.max(avail.length, 1);
+      const target = (HALF * 2 * ON_FIELD) / n;
+      const now = (g.sec * ON_FIELD) / n;
+      const slotOf = id => g.slots.find(s => s.pid === id);
+      const status = p => {
+        if (p.out) return 'out';
+        const slot = slotOf(p.id);
+        const d = p.sec - now;
+        if (slot) return slot.pos === 'GK' ? 'gk' : d > 420 ? 'rest' : 'ok';
+        return d < -300 ? 'due' : 'ok';
+      };
+      const due = avail.filter(p => status(p) === 'due');
+      const rest = avail.filter(p => status(p) === 'rest');
+      let suggestion = null;
+      if (!matchOver()) {
+        const benchP = g.bench.map(starById).filter(Boolean).sort((a, b) => a.sec - b.sec)[0];
+        const fieldIdx = g.slots.map((s, i) => ({ i: i, pos: s.pos, p: starById(s.pid) })).filter(x => x.pos !== 'GK').sort((a, b) => b.p.sec - a.p.sec)[0];
+        if (benchP && fieldIdx && fieldIdx.p.sec - benchP.sec > 300) suggestion = { inId: benchP.id, slot: fieldIdx.i };
+      }
+      return { target: target, status: status, due: due, rest: rest, n: n, suggestion: suggestion, slotOf: slotOf };
+    }
+    const STATUS = {
+      due: { cls: 'is-due', icon: 'alert', text: 'Due on' },
+      rest: { cls: 'is-rest', icon: 'alert', text: 'Due a rest' },
+      ok: { cls: 'is-ok', icon: 'check', text: 'On track' },
+      gk: { cls: '', icon: 'check', text: 'Keeper' },
+      out: { cls: 'is-out', icon: 'ban', text: 'Out' }
+    };
+    const statusLine = st => '<span class="pstatus ' + STATUS[st].cls + '">' + icon(STATUS[st].icon, 'icon-sm') + STATUS[st].text + '</span>';
+
+    /* ---------- shared fragments ---------- */
+    function teamRail() {
+      return '<div class="od-rail" role="group" aria-label="Choose team">' + TEAMS.map(t =>
+        '<button class="team-chip od-field" data-action="team" data-id="' + t.id + '" aria-pressed="' + (t.id === state.team) + '">' +
+          '<span class="team-chip-name">' + esc(t.name) + '</span>' +
+          '<span class="team-chip-meta">' + esc(teamMeta(t)) + '</span>' +
+        '</button>').join('') + '</div>';
+    }
+
+    function eventRow(e, o) {
+      o = o || {};
+      const live = isLive(e), past = isPast(e);
+      const teamBit = o.team ? ' · ' + esc(teamById(e.team).name) : '';
+      const tag = live
+        ? '<span class="ev-tag is-live"><span class="live-dot"></span>Live now' + teamBit + '</span>'
+        : '<span class="ev-tag is-' + e.type + '">' + icon(e.type === 'match' ? 'ball' : 'cone', 'icon-sm') + (e.type === 'match' ? 'Match' : 'Practice') + teamBit + '</span>';
+      let meta;
+      const sc = evScore(e);
+      if (live) meta = phaseLabel() + ' · ' + state.gd.us + '–' + state.gd.them + ' · ' + e.venue;
+      else if (past && e.type === 'match') meta = sc ? 'Final · ' + resultText(sc) : 'Played · ' + fmtTime(e.time);
+      else if (past) meta = 'Done · ' + fmtTime(e.time);
+      else meta = fmtTime(e.time) + ' · ' + (e.venue || 'Location not set');
+      const d = toDate(e.date);
+      const cell = o.date ? '<span class="datecell od-cell od-fixed"><span class="dc-mo">' + MO[d.getMonth()] + '</span><span class="dc-d">' + d.getDate() + '</span></span>' : '';
+      return '<li><button class="event-row od-row" data-action="event" data-id="' + e.id + '">' + cell +
+        '<span class="od-field od-fill">' + tag + '<span class="ev-title od-clamp-2">' + esc(evTitle(e)) + '</span><span class="ev-meta od-truncate">' + esc(meta) + '</span></span>' +
+        icon('chev-right', 'chev') + '</button></li>';
+    }
+
+    function weekStrip(week, o) {
+      let html = '<div class="week" role="group" aria-label="Days of the week">';
+      for (let i = 0; i < 7; i++) {
+        const iso = addDays(week, i);
+        const d = toDate(iso);
+        const evs = EVENTS.filter(e => e.date === iso && (o.team === 'all' || e.team === o.team) && (!o.type || o.type === 'all' || e.type === o.type));
+        const types = ['match', 'practice'].filter(t => evs.some(e => e.type === t));
+        const marks = types.map(t => '<span class="is-' + t + '">' + icon(t === 'match' ? 'ball' : 'cone', 'icon-sm') + '</span>').join('');
+        const label = WDL[d.getDay()] + ', ' + fmtShort(iso) + (iso === TODAY ? ', today' : '') + ', ' + (evs.length ? types.map(t => t === 'match' ? 'match' : 'practice').join(' and ') : 'nothing scheduled');
+        html += '<button class="day od-cell' + (iso === TODAY ? ' is-today' : '') + '" data-action="' + o.action + '" data-id="' + iso + '"' +
+          (o.selectable ? ' aria-pressed="' + (o.selected === iso) + '"' : '') + ' aria-label="' + esc(label) + '">' +
+          '<span class="day-wd">' + WD[d.getDay()] + '</span><span class="day-num">' + d.getDate() + '</span><span class="day-marks">' + marks + '</span></button>';
+      }
+      return html + '</div>';
+    }
+
+    const emptyState = (ic, title, text, actions) =>
+      '<div class="empty"><h2>' + title + '</h2><p class="muted">' + text + '</p>' +
+      (actions ? '<div class="od-cluster empty-actions">' + actions + '</div>' : '') + '</div>';
+
+    /* ---------- Home ---------- */
+    function renderHome() {
+      const t = curTeam();
+      const d = toDate(TODAY);
+      $('#bar-home').innerHTML =
+        '<div class="od-row-top"><div class="od-field od-fill"><p class="screen-kicker">' + WDL[d.getDay()] + ', ' + fmtShort(TODAY) + '</p><h1>Good morning, Rickey</h1></div>' +
+        '<button class="icon-btn is-outlined od-fixed" data-action="appearance" aria-label="Appearance">' + icon('contrast') + '</button></div>';
+
+      const evs = EVENTS.filter(e => e.team === t.id).sort(evSort);
+      const live = evs.find(isLive);
+      const upcoming = evs.filter(e => !isPast(e) && !isLive(e));
+      const past = evs.filter(isPast).reverse();
+      let hero, coming;
+      if (live) {
+        const f = fair();
+        const hint = f.due.length ? plural(f.due.length, 'player', 'players') + ' due on' : 'Minutes even';
+        hero =
+          '<section class="hero on-navy' + (state.gd.running ? ' is-running' : '') + '" aria-label="Live match">' +
+            '<div class="od-row"><span class="live-pill od-fill"><span class="live-dot"></span><span>Live · <span data-phase>' + phaseLabel() + '</span></span></span>' +
+            '<span class="hero-clock od-nowrap od-fixed" data-clock>' + fmtClock(state.gd.sec) + '</span></div>' +
+            '<div class="od-row hero-score"><span class="hero-team od-fill">' + esc(t.name) + '</span>' +
+            '<span class="hero-num od-nowrap od-fixed">' + state.gd.us + '–' + state.gd.them + '</span>' +
+            '<span class="hero-team is-right od-fill">' + esc(live.opp) + '</span></div>' +
+            '<p class="hero-meta">' + esc(live.venue) + ' · ' + hint + '</p>' +
+            '<a class="btn btn-volt btn-block" href="#/gameday">Open gameday</a>' +
+          '</section>';
+        coming = upcoming;
+      } else if (upcoming.length) {
+        const e = upcoming[0];
+        hero =
+          '<section class="hero on-navy" aria-label="Next up">' +
+            '<p class="hero-label">' + (isPre(e) ? 'Kickoff in 15 min' : 'Next up') + ' · ' + (e.type === 'match' ? 'Match' : 'Practice') + '</p>' +
+            '<h2 class="hero-title">' + esc(evTitle(e)) + '</h2>' +
+            '<div class="od-field"><p class="od-nowrap">' + fmtDay(e.date) + ' · ' + fmtTime(e.time) + '</p><p class="hero-meta">' + esc(e.venue || 'Location not set') + '</p></div>' +
+            (isPre(e)
+              ? '<p class="hero-meta">' + filledCount() + ' of ' + state.gd.slots.length + ' positions filled</p><a class="btn btn-on-navy btn-block" href="#/gameday">' + (filledCount() === state.gd.slots.length ? 'Review lineup' : 'Set lineup') + '</a>'
+              : '<button class="btn btn-on-navy btn-block" data-action="event" data-id="' + e.id + '">View details</button>') +
+          '</section>';
+        coming = upcoming.slice(1);
+      } else {
+        hero = emptyState('calendar', 'Nothing scheduled', 'No matches or practices for ' + esc(t.name) + ' yet.',
+          '<button class="btn btn-primary" data-action="add-event">' + icon('plus') + 'Add event</button>');
+        coming = [];
+      }
+
+      let html = teamRail() + hero +
+        '<section class="section"><div class="od-row section-head"><h2 class="od-fill">This week</h2><a class="link od-fixed" href="#/calendar">Open calendar</a></div>' +
+        weekStrip(weekStart(TODAY), { action: 'home-day', team: t.id }) + '</section>';
+      if (coming.length) html += '<section class="section"><h2>Coming up</h2><ul class="event-list">' + coming.slice(0, 3).map(e => eventRow(e, { date: true })).join('') + '</ul></section>';
+      if (past.length) html += '<section class="section"><h2>Recent</h2><ul class="event-list">' + past.slice(0, 3).map(e => eventRow(e, { date: true })).join('') + '</ul></section>';
+      $('#body-home').innerHTML = html;
+    }
+
+    /* ---------- Calendar ---------- */
+    function renderCalendar() {
+      const c = state.cal;
+      const end = addDays(c.week, 6);
+      const thisWeek = c.week === weekStart(TODAY);
+      $('#bar-calendar').innerHTML =
+        '<div class="od-row"><h1 class="od-fill">Calendar</h1><button class="btn btn-primary btn-sm od-fixed" data-action="add-event">' + icon('plus') + 'Add event</button></div>' +
+        '<div class="od-row"><button class="icon-btn is-outlined od-fixed" data-action="cal-prev" aria-label="Previous week">' + icon('chev-left') + '</button>' +
+        '<p class="week-nav-label od-fill od-nowrap">' + fmtShort(c.week) + ' – ' + fmtShort(end) + (thisWeek ? ' · This week' : '') + '</p>' +
+        '<button class="icon-btn is-outlined od-fixed" data-action="cal-next" aria-label="Next week">' + icon('chev-right') + '</button></div>' +
+        weekStrip(c.week, { action: 'cal-day', selectable: true, selected: c.day, team: c.team, type: c.type });
+
+      const chips = '<div class="od-rail" role="group" aria-label="Filter by team">' +
+        [{ id: 'all', name: 'All teams' }].concat(TEAMS).map(t => '<button class="chip" data-action="cal-team" data-id="' + t.id + '" aria-pressed="' + (c.team === t.id) + '">' + esc(t.name) + '</button>').join('') + '</div>';
+      const seg = '<div class="seg" role="group" aria-label="Filter by event type">' +
+        [['all', 'All'], ['match', 'Matches'], ['practice', 'Practices']].map(x => '<button data-action="cal-type" data-v="' + x[0] + '" aria-pressed="' + (c.type === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+
+      const days = c.day ? [c.day] : [0, 1, 2, 3, 4, 5, 6].map(i => addDays(c.week, i));
+      const match = e => (c.team === 'all' || e.team === c.team) && (c.type === 'all' || e.type === c.type);
+      let agenda = '';
+      days.forEach(iso => {
+        const evs = EVENTS.filter(e => e.date === iso && match(e)).sort(evSort);
+        if (!evs.length) return;
+        agenda += '<section class="section"><div class="od-row"><h2 class="day-head od-fill">' + fmtDay(iso) + '</h2>' + (iso === TODAY ? '<span class="day-head-today od-fixed">Today</span>' : '') + '</div>' +
+          '<ul class="event-list">' + evs.map(e => eventRow(e, { team: c.team === 'all' })).join('') + '</ul></section>';
+      });
+      const filtered = c.team !== 'all' || c.type !== 'all';
+      if (!agenda) {
+        agenda = emptyState('calendar',
+          c.day ? 'Nothing on ' + fmtDay(c.day) : 'Nothing this week',
+          filtered ? 'No events match these filters.' : 'No matches or practices.',
+          '<button class="btn btn-primary" data-action="add-event">' + icon('plus') + 'Add event</button>' +
+          (filtered ? '<button class="btn btn-secondary" data-action="cal-clear">Clear filters</button>' : ''));
+      }
+      const back = (c.day ? '<button class="btn btn-secondary btn-sm" data-action="cal-week">Show whole week</button>' : '') +
+        (!thisWeek ? '<button class="btn btn-secondary btn-sm" data-action="cal-today">Back to this week</button>' : '');
+      $('#body-calendar').innerHTML = chips + seg + (back ? '<div class="od-cluster">' + back + '</div>' : '') + agenda;
+    }
+
+    /* ---------- Gameday ---------- */
+    function playerRow(p, f, kind, slotIdx) {
+      const st = f.status(p);
+      const slot = f.slotOf(p.id);
+      const pos = slot ? slot.pos : p.pos;
+      const frac = Math.min(1, p.sec / f.target).toFixed(3);
+      const over = matchOver();
+      const action = kind === 'bench'
+        ? '<button class="btn btn-secondary btn-sm od-fixed" data-action="sub-in" data-id="' + p.id + '"' + (over ? ' disabled' : '') + '>Sub in</button>'
+        : '<button class="icon-btn is-outlined od-fixed" data-action="sub-out" data-slot="' + slotIdx + '" aria-label="Sub off ' + esc(p.name) + '"' + (over ? ' disabled' : '') + '>' + icon('swap') + '</button>';
+      return '<li class="prow od-row"><span class="prow-num od-fixed">' + p.n + '</span>' +
+        '<div class="od-field od-fill prow-body">' +
+          '<div class="od-row"><span class="prow-name od-truncate od-fill">' + esc(p.name) + ' <span class="prow-pos">' + pos + '</span></span><span class="prow-min od-nowrap od-fixed">' + mins(p.sec) + ' min</span></div>' +
+          '<span class="bar ' + STATUS[st].cls + '" aria-hidden="true"><span class="bar-fill" style="transform:scaleX(' + frac + ')"></span></span>' +
+          (p.sec === 0 && kind === 'bench' ? '<span class="pstatus is-due">' + icon('alert', 'icon-sm') + 'Has not played yet</span>' : statusLine(st)) +
+        '</div>' + action + '</li>';
+    }
+
+    function renderGameday() {
+      const t = curTeam();
+      const bar = $('#bar-gameday');
+      const body = $('#body-gameday');
+      const foot = $('#foot-gameday');
+      foot.hidden = true;
+      foot.innerHTML = '';
+      if (t.id !== 'stars') {
+        bar.className = 'screen-bar';
+        bar.innerHTML = '<div class="od-field"><p class="screen-kicker">' + esc(t.name) + '</p><h1>Gameday</h1></div>';
+        body.innerHTML = emptyState('ball', 'No match today', 'Gameday opens on match days.',
+          '<button class="btn btn-primary" data-action="team" data-id="stars">Switch to Shooting Stars</button><a class="btn btn-secondary" href="#/calendar">Open calendar</a>');
+        return;
+      }
+      const g = state.gd;
+      if (state.gd.phase === 'pre') { renderLineup(t, bar, body, foot); return; }
+      const ev = EVENTS.find(e => e.today);
+      const over = matchOver();
+      const f = fair();
+      bar.className = 'on-navy';
+      bar.innerHTML =
+        '<div class="scorebar' + (g.running ? ' is-running' : '') + '">' +
+          '<div class="od-row"><span class="live-pill od-fill"><span class="live-dot"></span><span data-phase>' + phaseLabel() + '</span></span><span class="sb-meta od-fixed od-nowrap">U9G · ' + esc(ev.venue) + '</span></div>' +
+          '<div class="sb-grid">' +
+            '<div class="od-stat sb-team"><span class="sb-name">' + esc(t.name) + '</span><span class="sb-score">' + g.us + '</span>' +
+              '<button class="btn btn-navy-raised goal-btn" data-action="goal-us"' + (over ? ' disabled' : '') + ' aria-label="Add goal for ' + esc(t.name) + '">' + icon('plus', 'icon-sm') + 'Goal</button></div>' +
+            '<div class="sb-clock"><span class="clock" data-clock role="timer" aria-label="Match clock">' + fmtClock(g.sec) + '</span>' +
+              '<button class="clock-btn" data-action="clock-toggle"' + (over ? ' disabled' : '') + ' aria-label="' + (g.running ? 'Pause clock' : g.phase === 'ht' ? 'Start second half' : 'Start clock') + '">' + icon(g.running ? 'pause' : 'play') + '</button>' +
+              '<span class="clock-state">' + clockState() + '</span></div>' +
+            '<div class="od-stat sb-team is-right"><span class="sb-name">' + esc(ev.opp) + '</span><span class="sb-score">' + g.them + '</span>' +
+              '<button class="btn btn-navy-raised goal-btn" data-action="goal-them"' + (over ? ' disabled' : '') + ' aria-label="Add goal for ' + esc(ev.opp) + '">' + icon('plus', 'icon-sm') + 'Goal</button></div>' +
+          '</div>' +
+        '</div>';
+
+      let advice;
+      if (over) advice = '<p class="balanced">' + icon('check-circle', 'icon-sm') + 'Full time.</p>';
+      else if (f.suggestion) {
+        const pin = starById(f.suggestion.inId), pout = starById(g.slots[f.suggestion.slot].pid);
+        advice = '<div class="suggest od-row"><div class="od-field od-fill"><span class="suggest-label">Suggested sub</span><span class="suggest-text">' + esc(pin.name) + ' on for ' + esc(pout.name) + '</span></div>' +
+          '<button class="btn btn-primary od-fixed" data-action="suggest-swap">Make sub</button></div>';
+      } else advice = '<p class="balanced">' + icon('check-circle', 'icon-sm') + 'Minutes are even. No sub needed.</p>';
+
+      const fairCard =
+        '<section class="card fair" aria-label="Fair play">' +
+          '<div class="od-row-top">' +
+          '<div class="od-field od-fill"><h2>Fair play</h2><p class="small muted">Target about ' + Math.round(f.target / 60) + ' min each · ' + plural(f.n, 'player', 'players') + ' today</p>' +
+          '<p class="small"><strong>' + f.due.length + '</strong> due on · <strong>' + f.rest.length + '</strong> due a rest</p></div></div>' + advice +
+        '</section>';
+
+      const seg = '<div class="seg seg-compact od-fixed" role="group" aria-label="Lineup view">' +
+        [['pitch', 'Pitch'], ['list', 'List']].map(x => '<button data-action="gd-view" data-v="' + x[0] + '" aria-pressed="' + (g.view === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+
+      let lineup;
+      if (g.view === 'pitch') {
+        const token = i => {
+          const p = starById(g.slots[i].pid), st = f.status(p);
+          return '<button class="token od-cell' + (st === 'rest' ? ' is-rest' : '') + '" data-action="sub-out" data-slot="' + i + '"' + (over ? ' disabled' : '') +
+            ' aria-label="' + esc(p.name) + ', ' + POS[g.slots[i].pos].toLowerCase() + ', ' + mins(p.sec) + ' minutes, ' + STATUS[st].text.toLowerCase() + '. Sub off">' +
+            '<span class="token-num">' + p.n + '</span><span class="token-name od-truncate">' + esc(firstName(p)) + '</span>' +
+            '<span class="token-min od-nowrap">' + (st === 'rest' ? 'Rest · ' : '') + mins(p.sec) + ' min</span></button>';
+        };
+        lineup = '<div class="pitch"><span class="pitch-lines" aria-hidden="true"></span><span class="pitch-arc" aria-hidden="true"></span><span class="pitch-box" aria-hidden="true"></span>' +
+          pitchRows().map(r => '<div class="pitch-row">' + r.map(token).join('') + '</div>').join('') + '</div>' +
+          '<p class="small muted">Tap a player to sub them off.</p>';
+      } else {
+        lineup = '<ul class="player-list">' + g.slots.map((s, i) => playerRow(starById(s.pid), f, 'field', i)).join('') + '</ul>';
+      }
+
+      const benchP = g.bench.map(starById).filter(Boolean).sort((a, b) => a.sec - b.sec);
+      const bench = benchP.length
+        ? '<ul class="player-list">' + benchP.map(p => playerRow(p, f, 'bench')).join('') + '</ul>'
+        : '<p class="muted">Bench is empty.</p>';
+      const outs = ROSTERS.stars.filter(p => p.out);
+
+      body.innerHTML = fairCard +
+        '<section class="section"><div class="od-row section-head"><h2 class="od-fill">On the field · ' + g.slots.length + '</h2>' + seg + '</div>' + lineup + '</section>' +
+        '<section class="section"><div class="od-row section-head"><h2 class="od-fill">Bench · ' + benchP.length + '</h2></div>' + bench +
+        (outs.length ? '<p class="small muted">Out today: ' + outs.map(p => esc(p.name)).join(', ') + '</p>' : '') + '</section>';
+    }
+
+    /* ---------- Gameday: pre-match lineup builder ---------- */
+    const FORMATIONS = {
+      '2-3-1': ['GK', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'FWD'],
+      '3-2-1': ['GK', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'FWD'],
+      '2-2-2': ['GK', 'DEF', 'DEF', 'MID', 'MID', 'FWD', 'FWD']
+    };
+    function announce(msg) {
+      const el = $('#srStatus');
+      el.textContent = '';
+      setTimeout(() => { el.textContent = msg; }, 30);
+    }
+    function placePlayer(pid, i) {
+      const g = state.gd, j = slotIndexOf(pid), other = g.slots[i].pid, p = starById(pid);
+      if (j === i) return;
+      if (j >= 0) g.slots[j].pid = other;
+      else { g.bench = g.bench.filter(x => x !== pid); if (other) g.bench.push(other); }
+      g.slots[i].pid = pid;
+      state.pick = null;
+      announce(p.name + (other ? ' swapped with ' + starById(other).name : ' placed') + ' at ' + POS[g.slots[i].pos].toLowerCase() + '. ' + filledCount() + ' of ' + g.slots.length + ' positions filled.');
+    }
+    function benchPlayer(pid) {
+      const g = state.gd, j = slotIndexOf(pid);
+      if (j < 0) return;
+      g.slots[j].pid = null;
+      g.bench.push(pid);
+      state.pick = null;
+      announce(starById(pid).name + ' moved to the bench. ' + filledCount() + ' of ' + g.slots.length + ' positions filled.');
+    }
+    function setFormation(key) {
+      const g = state.gd, pools = { GK: [], DEF: [], MID: [], FWD: [] };
+      g.slots.forEach(x => { if (x.pid) pools[x.pos].push(x.pid); });
+      g.formation = key;
+      g.slots = FORMATIONS[key].map(pos => ({ pos: pos, pid: pools[pos].shift() || null }));
+      const left = [].concat(pools.GK, pools.DEF, pools.MID, pools.FWD);
+      g.slots.forEach(x => { if (!x.pid && left.length) x.pid = left.shift(); });
+      state.pick = null;
+    }
+    function autoFill() {
+      const g = state.gd;
+      g.slots.forEach(x => {
+        if (x.pid) return;
+        const k = g.bench.findIndex(id => starById(id).pos === x.pos);
+        if (k >= 0) x.pid = g.bench.splice(k, 1)[0];
+      });
+      g.slots.forEach(x => { if (!x.pid && g.bench.length) x.pid = g.bench.shift(); });
+      state.pick = null;
+    }
+    function clearLineup() {
+      const g = state.gd;
+      g.slots.forEach(x => { if (x.pid) { g.bench.push(x.pid); x.pid = null; } });
+      state.pick = null;
+    }
+
+    function renderLineup(t, bar, body, foot) {
+      const g = state.gd, ev = EVENTS.find(e => e.today), n = g.slots.length, filled = filledCount();
+      const picked = state.pick ? starById(state.pick) : null;
+      bar.className = 'screen-bar';
+      bar.innerHTML = '<div class="od-field"><p class="screen-kicker">' + esc(t.name) + ' vs ' + esc(ev.opp) + '</p><h1>Set your lineup</h1>' +
+        '<p class="small muted">Kickoff ' + fmtTime(ev.time) + ' · in 15 min · ' + esc(ev.venue) + '</p></div>';
+
+      const seg = '<div class="od-row section-head"><h2 class="od-fill">Formation</h2><div class="seg seg-compact od-fixed" role="group" aria-label="Formation">' +
+        Object.keys(FORMATIONS).map(k => '<button data-action="gd-formation" data-v="' + k + '" aria-pressed="' + (g.formation === k) + '">' + k + '</button>').join('') + '</div></div>';
+
+      const slot = i => {
+        const x = g.slots[i], p = x.pid ? starById(x.pid) : null;
+        if (!p) {
+          return '<button class="slot od-cell is-empty" data-action="slot" data-slot="' + i + '" data-drop="slot:' + i + '" aria-label="' + POS[x.pos] + ' position, empty. ' +
+            (picked ? 'Place ' + esc(picked.name) + ' here' : 'Choose a player') + '"><span class="slot-ring">' + icon('plus') + '</span><span class="token-name">Open</span><span class="token-min">' + x.pos + '</span></button>';
+        }
+        return '<button class="slot od-cell" data-action="slot" data-slot="' + i + '" data-drop="slot:' + i + '" data-drag="' + p.id + '" aria-pressed="' + (state.pick === p.id) + '" aria-label="' +
+          POS[x.pos] + ': ' + esc(p.name) + ', number ' + num(p) + '"><span class="token-num">' + num(p) + '</span><span class="token-name od-truncate">' + esc(firstName(p)) + '</span><span class="token-min">' + x.pos + '</span></button>';
+      };
+      const pitch = '<div class="pitch"><span class="pitch-lines" aria-hidden="true"></span><span class="pitch-arc" aria-hidden="true"></span><span class="pitch-box" aria-hidden="true"></span>' +
+        pitchRows().map(r => '<div class="pitch-row">' + r.map(slot).join('') + '</div>').join('') + '</div>';
+      const hint = picked
+        ? '<p class="small"><strong>' + esc(picked.name) + '</strong> selected. Tap a position, or tap again to cancel.</p>'
+        : '<p class="small muted">Drag a player onto a position, or tap a player and then a position.</p>';
+
+      const benchP = g.bench.map(starById).filter(Boolean);
+      const chips = benchP.map(p => '<button class="bench-chip od-row" data-action="pick" data-id="' + p.id + '" data-drag="' + p.id + '" aria-pressed="' + (state.pick === p.id) + '" aria-label="' +
+        esc(p.name) + ', ' + POS[p.pos].toLowerCase() + ', number ' + num(p) + '"><span class="bench-num od-fixed">' + num(p) + '</span><span class="od-field od-fill"><span class="bench-name od-truncate">' +
+        esc(firstName(p)) + '</span><span class="bench-pos">' + p.pos + '</span></span></button>').join('');
+      const tray = '<div class="bench-tray" data-drop="bench">' +
+        (chips ? '<div class="od-grid" style="--od-gap:8px">' + chips + '</div>' : '<p class="small muted">Everyone is on the pitch. Drag a player here to bench them.</p>') +
+        (picked && slotIndexOf(picked.id) >= 0 ? '<button class="btn btn-secondary btn-sm btn-block" data-action="to-bench" data-id="' + picked.id + '">Move ' + esc(firstName(picked)) + ' to the bench</button>' : '') + '</div>';
+      const outs = ROSTERS.stars.filter(p => p.out);
+
+      body.innerHTML = seg +
+        '<section class="section">' + pitch + hint + '</section>' +
+        '<section class="section"><div class="od-row section-head"><h2 class="od-fill">Bench · ' + benchP.length + '</h2>' +
+        '<button class="btn btn-secondary btn-sm od-fixed" data-action="autofill"' + (filled === n || !benchP.length ? ' disabled' : '') + '>Auto-fill</button>' +
+        '<button class="btn btn-secondary btn-sm od-fixed" data-action="lineup-clear"' + (filled === 0 ? ' disabled' : '') + '>Clear</button></div>' + tray +
+        (outs.length ? '<p class="small muted">Out today: ' + outs.map(p => esc(p.name)).join(', ') + '</p>' : '') + '</section>';
+
+      foot.hidden = false;
+      foot.innerHTML = '<div class="od-row" style="--od-gap:12px"><div class="od-field od-fill"><span class="detail-main od-nowrap">' + filled + ' of ' + n + ' positions filled</span>' +
+        '<span class="small muted" id="koHelp">' + (filled === n ? 'Lineup full.' : 'Fill ' + (n - filled) + ' more to kick off.') + '</span></div>' +
+        '<button class="btn btn-primary od-fixed" data-action="kickoff" aria-describedby="koHelp"' + (filled === n ? '' : ' disabled') + '>Kick off</button></div>';
+    }
+
+    function openSlotPicker(i) {
+      const g = state.gd, pos = g.slots[i].pos;
+      const bench = g.bench.map(starById).filter(Boolean).sort((a, b) => (b.pos === pos) - (a.pos === pos));
+      openSheet(sheetHead('Choose a ' + POS[pos].toLowerCase(), bench.length ? 'Players in this position first.' : '') +
+        (bench.length
+          ? '<ul class="pick-list">' + bench.map(p => '<li><button class="pick od-row" data-action="place" data-id="' + p.id + '" data-slot="' + i + '"><span class="jersey od-fixed">' + num(p) + '</span>' +
+            '<span class="od-field od-fill"><span class="ev-title od-truncate">' + esc(p.name) + '</span><span class="ev-meta">' + POS[p.pos] + '</span></span>' +
+            (p.pos === pos ? '<span class="pick-badge od-fixed">Plays here</span>' : '') + '</button></li>').join('') + '</ul>'
+          : '<p class="muted">Bench is empty.</p>'));
+    }
+
+    function appearanceSheet() {
+      const opts = [['system', 'Match system', 'Follows the phone setting'], ['light', 'Light', ''], ['dark', 'Dark', '']];
+      return sheetHead('Appearance', '') + '<div class="pick-list" role="radiogroup" aria-label="Appearance">' +
+        opts.map(o => '<button class="pick od-row" role="radio" aria-checked="' + (themePref === o[0]) + '" data-action="theme" data-v="' + o[0] + '"><span class="od-field od-fill"><span class="ev-title">' + o[1] +
+          '</span>' + (o[2] ? '<span class="ev-meta">' + o[2] + '</span>' : '') + '</span>' + (themePref === o[0] ? icon('check') : '') + '</button>').join('') + '</div>';
+    }
+
+    /* Drag and drop for the lineup builder (pointer events; tap-to-place is the equivalent path). */
+    let drag = null, suppressClick = false;
+    const phoneScreen = $('[data-phone-screen]');
+    const zoomFactor = () => (phoneScreen.getBoundingClientRect().width / parseFloat(getComputedStyle(phoneScreen).width)) || 1;
+    const dropAt = (x, y) => { const el = document.elementFromPoint(x, y); return el ? el.closest('[data-drop]') : null; };
+    const clearDrop = () => $$('.is-drop').forEach(el => el.classList.remove('is-drop'));
+    document.addEventListener('pointerdown', ev => {
+      if (state.gd.phase !== 'pre' || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+      const el = ev.target.closest('[data-drag]');
+      if (el) drag = { el: el, id: el.dataset.drag, x: ev.clientX, y: ev.clientY, pointer: ev.pointerId, on: false, z: 1, target: null };
+    });
+    document.addEventListener('pointermove', ev => {
+      if (!drag || ev.pointerId !== drag.pointer) return;
+      const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+      if (!drag.on) {
+        if (Math.hypot(dx, dy) < 8) return;
+        drag.on = true;
+        drag.z = zoomFactor();
+        drag.el.classList.add('is-dragging');
+        try { drag.el.setPointerCapture(drag.pointer); } catch (e) {}
+      }
+      drag.el.style.transform = 'translate(' + (dx / drag.z) + 'px,' + (dy / drag.z) + 'px) scale(1.08)';
+      const target = dropAt(ev.clientX, ev.clientY);
+      if (target !== drag.target) { clearDrop(); if (target) target.classList.add('is-drop'); drag.target = target; }
+    });
+    function endDrag(ev, cancelled) {
+      if (!drag || ev.pointerId !== drag.pointer) return;
+      const d = drag;
+      drag = null;
+      if (!d.on) return;
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 60);
+      const target = cancelled ? null : dropAt(ev.clientX, ev.clientY);
+      clearDrop();
+      d.el.classList.remove('is-dragging');
+      d.el.style.transform = '';
+      if (!target) return;
+      const key = target.dataset.drop;
+      if (key === 'bench') { if (slotIndexOf(d.id) >= 0) { benchPlayer(d.id); render(); } }
+      else {
+        const i = Number(key.split(':')[1]);
+        if (state.gd.slots[i] && state.gd.slots[i].pid !== d.id) { placePlayer(d.id, i); render(); }
+      }
+    }
+    document.addEventListener('pointerup', ev => endDrag(ev, false));
+    document.addEventListener('pointercancel', ev => endDrag(ev, true));
+
+    /* ---------- Practice ---------- */
+    function renderPractice() {
+      const t = curTeam();
+      const bar = $('#bar-practice');
+      const body = $('#body-practice');
+      bar.innerHTML = '<div class="od-field"><p class="screen-kicker">' + esc(t.name) + '</p><h1>Practice plan</h1></div>';
+      if (t.id !== 'stars') {
+        body.innerHTML = emptyState('clipboard', 'No practice plan yet', 'Schedule a practice to build a plan.',
+          '<button class="btn btn-primary" data-action="add-event" data-v="practice">' + icon('plus') + 'Schedule practice</button>' +
+          '<button class="btn btn-secondary" data-action="team" data-id="stars">Switch to Shooting Stars</button>');
+        return;
+      }
+      const next = EVENTS.filter(e => e.team === 'stars' && e.type === 'practice' && !isPast(e)).sort(evSort)[0];
+      const start = next ? next.time : '17:00';
+      const total = state.plan.reduce((a, b) => a + b.min, 0);
+      const diff = total - SESSION_MIN;
+      const status = diff === 0 ? '<span class="plan-status is-ok od-row" style="--od-gap:4px">' + icon('check', 'icon-sm') + 'Fits the ' + SESSION_MIN + '-minute session</span>'
+        : '<span class="plan-status is-off od-row" style="--od-gap:4px">' + icon('alert', 'icon-sm') + Math.abs(diff) + ' min ' + (diff > 0 ? 'over' : 'under') + ' the ' + SESSION_MIN + '-minute session</span>';
+
+      const info = next
+        ? '<section class="card next-practice"><span class="ev-tag is-practice">' + icon('cone', 'icon-sm') + 'Next practice</span>' +
+          '<p class="ev-title od-nowrap">' + fmtDay(next.date) + ' · ' + fmtTime(next.time) + '</p><p class="ev-meta">' + esc(next.venue) + '</p></section>'
+        : '<section class="card next-practice"><p class="ev-title">No practice scheduled</p><p class="ev-meta">This plan will attach to the next practice you add.</p></section>';
+
+      const stats = '<p class="summary-line">' + total + ' min planned · ' + plural(state.plan.length, 'drill', 'drills') + ' · ends ' + fmtTime(addMin(start, total)) + '</p>';
+
+      let offset = 0;
+      const blocks = state.plan.map((b, i) => {
+        const s = fmtTime(addMin(start, offset)).replace(/ (AM|PM)$/, '');
+        offset += b.min;
+        return '<li class="block od-row"><div class="block-time od-cell od-fixed"><span class="block-start">' + s + '</span><span class="block-dur">' + b.min + ' min</span></div>' +
+          '<button class="block-body od-field od-fill" data-action="drill" data-i="' + i + '"><span class="block-cat">' + esc(b.cat) + '</span><span class="block-title">' + esc(b.title) + '</span></button>' +
+          '<button class="icon-btn od-fixed" data-action="block-up" data-i="' + i + '" aria-label="Move ' + esc(b.title) + ' earlier"' + (i === 0 ? ' disabled' : '') + '>' + icon('chev-up') + '</button>' +
+          '<button class="icon-btn od-fixed" data-action="block-down" data-i="' + i + '" aria-label="Move ' + esc(b.title) + ' later"' + (i === state.plan.length - 1 ? ' disabled' : '') + '>' + icon('chev-down') + '</button></li>';
+      }).join('');
+
+      const list = state.plan.length ? '<ul class="block-list">' + blocks + '</ul>'
+        : emptyState('clipboard', 'No drills yet', 'Add a drill to start.', '');
+
+      body.innerHTML = info + stats +
+        '<section class="section"><div class="od-field"><h2>Session timeline</h2>' + status + '</div>' + list +
+        '<button class="btn btn-primary btn-block" data-action="add-drill">' + icon('plus') + 'Add drill</button>' +
+        '<p class="small muted">Tap a drill for coaching points. Use the arrows to reorder.</p></section>';
+    }
+
+    /* ---------- Team ---------- */
+    function rosterStatus(p, teamId) {
+      if (p.out) return 'out';
+      if (teamId === 'stars' && !matchOver() && state.gd.slots.some(s => s.pid === p.id)) return matchLive() ? 'field' : 'lineup';
+      return 'avail';
+    }
+    function renderTeam() {
+      const t = curTeam();
+      const r = roster();
+      $('#bar-team').innerHTML = '<div class="od-row"><h1 class="od-fill">Team</h1>' +
+        '<button class="btn btn-primary btn-sm od-fixed" data-action="add-player">' + icon('plus') + 'Add player</button></div>';
+
+      let html = teamRail();
+      if (!r.length) {
+        html += emptyState('users', 'No players yet', 'Add players to track availability and minutes.',
+          '<button class="btn btn-primary" data-action="add-player">' + icon('plus') + 'Add first player</button>');
+      } else {
+        const avail = r.filter(p => !p.out).length;
+        html += '<div class="seg" role="group" aria-label="Filter roster">' +
+          [['all', 'All ' + r.length], ['avail', 'Available ' + avail], ['out', 'Out ' + (r.length - avail)]].map(x => '<button data-action="roster-filter" data-v="' + x[0] + '" aria-pressed="' + (state.rosterFilter === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+        const shown = r.filter(p => state.rosterFilter === 'all' || (state.rosterFilter === 'out') === p.out)
+          .slice().sort((a, b) => (a.n == null ? 999 : a.n) - (b.n == null ? 999 : b.n));
+        const label = { out: ['is-out', 'ban', 'Out'], field: ['is-ok', 'ball', 'On the field'], lineup: ['is-ok', 'ball', 'Starting'], avail: ['is-ok', 'check', 'Available'] };
+        html += '<section class="section"><h2>Roster</h2>' + (shown.length
+          ? '<ul class="event-list">' + shown.map(p => {
+              const l = label[rosterStatus(p, t.id)];
+              return '<li><button class="roster-row od-row" data-action="player" data-id="' + p.id + '"><span class="jersey od-fixed">' + (p.n == null ? '–' : p.n) + '</span>' +
+                '<span class="od-field od-fill"><span class="ev-title od-truncate">' + esc(p.name) + '</span><span class="ev-meta">' + POS[p.pos] + '</span></span>' +
+                '<span class="pstatus ' + l[0] + ' od-fixed od-nowrap">' + icon(l[1], 'icon-sm') + l[2] + '</span></button></li>';
+            }).join('') + '</ul>'
+          : emptyState('check-circle', state.rosterFilter === 'out' ? 'Nobody is out' : 'Nobody is available', state.rosterFilter === 'out' ? 'Everyone is available.' : 'Every player is marked out.',
+              '<button class="btn btn-secondary" data-action="roster-filter" data-v="all">Show all players</button>')) + '</section>';
+      }
+      html += '<div class="brand-foot"><div class="brand-tile"><img class="od-media" src="assets/artizo-mark.png" width="660" height="600" alt="Artizo Sport logo"></div></div>';
+      $('#body-team').innerHTML = html;
+    }
+
+    /* ---------- rendering + routing ---------- */
+    const ROUTES = ['home', 'calendar', 'gameday', 'practice', 'team'];
+    const RENDER = { home: renderHome, calendar: renderCalendar, gameday: renderGameday, practice: renderPractice, team: renderTeam };
+    const fidOf = el => [el.dataset.action, el.dataset.id, el.dataset.slot, el.dataset.i, el.dataset.v].join('|');
+    function keepFocus(root, fn) {
+      const a = document.activeElement;
+      const key = a && a.dataset && a.dataset.action && root.contains(a) ? fidOf(a) : null;
+      fn();
+      if (key) { const el = $$('[data-action]', root).find(x => fidOf(x) === key); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+    }
+    const scrollerOf = r => $('#body-' + r);
+    function render(r) { r = r || state.route; keepFocus($('#screen-' + r), RENDER[r]); syncLive(); }
+
+    function show(r) {
+      const prev = state.route;
+      const prevEl = $('#screen-' + prev);
+      if (prevEl && !prevEl.hidden) state.scroll[prev] = scrollerOf(prev).scrollTop;
+      ROUTES.forEach(x => { $('#screen-' + x).hidden = x !== r; });
+      state.route = r;
+      render(r);
+      scrollerOf(r).scrollTop = state.scroll[r] || 0;
+      $$('.tabbar a').forEach(a => { if (a.dataset.tab === r) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+      if (prev !== r || !prevEl) {
+        const el = $('#screen-' + r);
+        el.classList.add('is-entering');
+        el.addEventListener('animationend', () => el.classList.remove('is-entering'), { once: true });
+      }
+    }
+    function onRoute() {
+      const r = location.hash.replace(/^#\/?/, '');
+      closeSheet(true);
+      show(ROUTES.indexOf(r) >= 0 ? r : 'home');
+    }
+
+    function syncLive() {
+      const live = matchLive();
+      $('#tabLive').hidden = !live;
+      $('#tabLiveText').hidden = !live;
+    }
+
+    /* ---------- match clock ---------- */
+    function tick() {
+      const g = state.gd;
+      if (!g.running) return;
+      g.sec += 1;
+      g.slots.forEach(s => { starById(s.pid).sec += 1; });
+      let phaseChanged = false;
+      if (g.phase === 'live1' && g.sec >= HALF) { g.phase = 'ht'; g.running = false; phaseChanged = true; }
+      else if (g.phase === 'live2' && g.sec >= HALF * 2) { g.phase = 'ft'; g.running = false; phaseChanged = true; }
+      $$('[data-clock]').forEach(el => { el.textContent = fmtClock(g.sec); });
+      if (phaseChanged || g.sec % 60 === 0) {
+        if (state.route !== 'practice') render();
+        if (phaseChanged) toast(g.phase === 'ht' ? 'Half time. Clock paused at 25:00.' : 'Full time. Final score ' + g.us + '–' + g.them + '.');
+      }
+    }
+
+    /* ---------- sheets ---------- */
+    const layer = $('#sheetLayer'), sheet = $('#sheet');
+    let opener = null, closeTimer = null;
+    const sheetHead = (title, sub) =>
+      '<div class="sheet-head od-row-top"><div class="od-field od-fill"><h2 id="sheetTitle" tabindex="-1">' + title + '</h2>' + (sub ? '<p class="muted small">' + sub + '</p>' : '') + '</div>' +
+      '<button class="icon-btn is-outlined od-fixed" data-action="close" aria-label="Close">' + icon('x') + '</button></div>';
+
+    function openSheet(html) {
+      clearTimeout(closeTimer);
+      if (layer.hidden) opener = document.activeElement;
+      sheet.innerHTML = html;
+      sheet.scrollTop = 0;
+      layer.hidden = false;
+      void layer.offsetWidth;
+      layer.classList.add('is-open');
+      const h = $('#sheetTitle', sheet);
+      if (h) h.focus({ preventScroll: true });
+    }
+    function setSheet(html) { keepFocus(sheet, () => { sheet.innerHTML = html; }); }
+    function closeSheet(instant) {
+      if (layer.hidden) return;
+      layer.classList.remove('is-open');
+      const done = () => { layer.hidden = true; sheet.innerHTML = ''; };
+      clearTimeout(closeTimer);
+      if (instant) done(); else closeTimer = setTimeout(done, 210);
+      if (opener && opener.dataset && opener.dataset.action) {
+        const key = fidOf(opener);
+        const el = $$('[data-action]', $('#app')).find(x => fidOf(x) === key && x.offsetParent !== null);
+        if (el) el.focus({ preventScroll: true });
+      }
+      opener = null;
+    }
+
+    /* ---------- toast ---------- */
+    const toastEl = $('#toast');
+    let toastTimer = null, undoFn = null;
+    function toast(msg, undo) {
+      clearTimeout(toastTimer);
+      undoFn = undo || null;
+      toastEl.hidden = true;
+      toastEl.innerHTML = '<span class="toast-msg">' + esc(msg) + '</span>' + (undo ? '<button type="button" data-action="undo">Undo</button>' : '');
+      void toastEl.offsetWidth;
+      toastEl.hidden = false;
+      toastTimer = setTimeout(() => { toastEl.hidden = true; undoFn = null; }, undo ? 6000 : 3500);
+    }
+
+    /* ---------- event sheet ---------- */
+    function openEvent(id) {
+      const e = EVENTS.find(x => x.id === id);
+      if (!e) return;
+      const t = teamById(e.team);
+      const live = isLive(e), past = isPast(e);
+      const sc = evScore(e);
+      const tag = live ? '<span class="ev-tag is-live"><span class="live-dot"></span>Live now · ' + phaseLabel() + '</span>'
+        : '<span class="ev-tag is-' + e.type + '">' + icon(e.type === 'match' ? 'ball' : 'cone', 'icon-sm') + (e.type === 'match' ? 'Match' : 'Practice') + (past ? ' · ' + (e.type === 'match' ? 'Played' : 'Done') : '') + '</span>';
+      const r = roster(e.team);
+      const going = r.filter(p => !p.out).length;
+      let rows =
+        '<div class="detail-row od-row-top">' + icon('clock') + '<div class="od-field od-fill"><span class="detail-main od-nowrap">' + fmtDay(e.date) + ' · ' + fmtTime(e.time) + '</span>' +
+        (live || (past && e.type === 'match' && sc) ? '<span class="muted small">' + (live ? 'Score ' + sc[0] + '–' + sc[1] : 'Final · ' + resultText(sc)) + '</span>' : '') + '</div></div>' +
+        '<div class="detail-row od-row-top">' + icon('pin') + '<div class="od-field od-fill"><span class="detail-main">' + esc(e.venue || 'Location not set') + '</span>' + (e.address ? '<span class="muted small">' + esc(e.address) + '</span>' : '') + '</div></div>' +
+        '<div class="detail-row od-row-top">' + icon('users') + '<div class="od-field od-fill"><span class="detail-main">' + esc(t.name) + '</span>' +
+        (!past && r.length ? '<span class="muted small">' + going + ' available · ' + (r.length - going) + ' out</span>' : '') + '</div></div>';
+      let actions = '';
+      if (live) actions += '<a class="btn btn-primary btn-block" href="#/gameday">Open gameday</a>';
+      else if (isPre(e)) actions += '<a class="btn btn-primary btn-block" href="#/gameday">Set lineup</a>';
+      else if (!past && e.type === 'practice' && e.team === 'stars') actions += '<a class="btn btn-primary btn-block" href="#/practice">Open practice plan</a>';
+      if (e.address) actions += '<a class="btn btn-secondary btn-block" target="_blank" rel="noopener" href="https://maps.apple.com/?q=' + encodeURIComponent(e.venue + ', ' + e.address) + '">' + icon('nav') + 'Directions</a>';
+      openSheet(sheetHead(esc(evTitle(e)), '') + tag + '<div class="od-stack" style="--od-gap:16px">' + rows + '</div>' + (actions ? '<div class="sheet-actions">' + actions + '</div>' : ''));
+    }
+
+    /* ---------- substitutions + goals ---------- */
+    function doSwap(inId, slotIdx) {
+      const g = state.gd;
+      const outId = g.slots[slotIdx].pid;
+      const bi = g.bench.indexOf(inId);
+      if (bi < 0) return;
+      g.slots[slotIdx].pid = inId;
+      g.bench[bi] = outId;
+      closeSheet();
+      render();
+      toast(starById(inId).name + ' on for ' + starById(outId).name + ' · ' + fmtClock(g.sec), () => {
+        const s = g.slots[slotIdx], b = g.bench.indexOf(outId);
+        if (s.pid === inId && b >= 0) { s.pid = outId; g.bench[b] = inId; render(); toast('Sub undone.'); }
+      });
+    }
+    function pickRow(p, pos, action, attrs, badge) {
+      return '<li><button class="pick od-row" data-action="' + action + '" ' + attrs + '><span class="jersey od-fixed">' + p.n + '</span>' +
+        '<span class="od-field od-fill"><span class="ev-title od-truncate">' + esc(p.name) + '</span><span class="ev-meta od-nowrap">' + POS[pos] + ' · ' + mins(p.sec) + ' min</span></span>' +
+        (badge ? '<span class="pick-badge od-fixed">' + badge + '</span>' : '') + '</button></li>';
+    }
+    function openSubIn(inId) {
+      const g = state.gd, p = starById(inId);
+      const field = g.slots.map((s, i) => ({ i: i, pos: s.pos, p: starById(s.pid) })).sort((a, b) => (a.pos === 'GK') - (b.pos === 'GK') || b.p.sec - a.p.sec);
+      openSheet(sheetHead('Sub in ' + esc(p.name), 'Who comes off? Most minutes first.') +
+        '<ul class="pick-list">' + field.map((x, k) => pickRow(x.p, x.pos, 'swap', 'data-id="' + inId + '" data-slot="' + x.i + '"', k === 0 ? 'Most minutes' : '')).join('') + '</ul>');
+    }
+    function openSubOut(slotIdx) {
+      const g = state.gd, p = starById(g.slots[slotIdx].pid);
+      const bench = g.bench.map(starById).filter(Boolean).sort((a, b) => a.sec - b.sec);
+      openSheet(sheetHead('Sub off ' + esc(p.name), bench.length ? 'Who comes on? Fewest minutes first.' : '') +
+        (bench.length ? '<ul class="pick-list">' + bench.map((b, k) => pickRow(b, b.pos, 'swap', 'data-id="' + b.id + '" data-slot="' + slotIdx + '"', k === 0 ? 'Fewest minutes' : '')).join('') + '</ul>'
+          : '<p class="muted">Bench is empty.</p>'));
+    }
+    function openScorer() {
+      const g = state.gd;
+      const field = g.slots.map(s => ({ pos: s.pos, p: starById(s.pid) })).reverse();
+      openSheet(sheetHead('Who scored?', 'Goal at ' + fmtClock(g.sec)) +
+        '<ul class="pick-list">' + field.map(x => pickRow(x.p, x.pos, 'scorer', 'data-id="' + x.p.id + '"', x.p.goals ? plural(x.p.goals, 'goal', 'goals') : '')).join('') + '</ul>' +
+        '<button class="btn btn-secondary btn-block" data-action="scorer" data-id="">Skip, not sure who scored</button>');
+    }
+
+    /* ---------- drill sheets ---------- */
+    function drillSheet(i, confirm) {
+      const b = state.plan[i];
+      const danger = confirm
+        ? '<div class="confirm" role="alert"><p><strong>Remove ' + esc(b.title) + ' from this plan?</strong></p><div class="sheet-actions is-pair">' +
+          '<button class="btn btn-secondary" data-action="drill" data-i="' + i + '">Keep it</button><button class="btn btn-danger-solid" data-action="drill-remove-yes" data-i="' + i + '">Remove</button></div></div>'
+        : '<button class="btn btn-danger btn-block" data-action="drill-remove" data-i="' + i + '">Remove from plan</button>';
+      return sheetHead(esc(b.title), esc(b.cat)) +
+        '<p>' + esc(b.desc) + '</p>' +
+        '<div class="od-stack"><h3>Set-up</h3><p>' + esc(b.setup) + '</p></div>' +
+        '<div class="od-stack"><h3>Coaching points</h3><ul class="points">' + b.points.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' +
+        '<div class="od-stack"><h3 id="durLabel">Duration</h3><div class="stepper od-row" role="group" aria-labelledby="durLabel">' +
+          '<button class="icon-btn is-outlined od-fixed" data-action="drill-dur" data-i="' + i + '" data-v="-5" aria-label="5 minutes shorter"' + (b.min <= 5 ? ' disabled' : '') + '>' + icon('minus') + '</button>' +
+          '<span class="stepper-val" aria-live="polite">' + b.min + ' min</span>' +
+          '<button class="icon-btn is-outlined od-fixed" data-action="drill-dur" data-i="' + i + '" data-v="5" aria-label="5 minutes longer"' + (b.min >= 30 ? ' disabled' : '') + '>' + icon('plus') + '</button></div></div>' +
+        danger;
+    }
+    function openDrillPicker() {
+      openSheet(sheetHead('Add a drill', 'Adds to the end of the session.') +
+        '<ul class="pick-list">' + Object.keys(DRILLS).map(k => { const d = DRILLS[k];
+          return '<li><button class="pick od-row" data-action="pick-drill" data-id="' + k + '"><span class="od-field od-fill"><span class="ev-title">' + esc(d.title) + '</span><span class="ev-meta od-nowrap">' + esc(d.cat) + ' · ' + d.min + ' min</span></span>' + icon('plus', 'chev') + '</button></li>'; }).join('') + '</ul>');
+    }
+
+    /* ---------- player sheet ---------- */
+    function playerSheet(id) {
+      const tId = state.team, p = roster().find(x => x.id === id);
+      if (!p) return '';
+      const st = rosterStatus(p, tId);
+      const onField = st === 'field';
+      const today = tId === 'stars' ? '<p class="summary-line">Today: ' + mins(p.sec) + ' min played · ' + plural(p.goals, 'goal', 'goals') + '</p>' : '';
+      return '<div class="sheet-head od-row" style="--od-gap:12px"><span class="jersey is-lg od-fixed">' + (p.n == null ? '–' : p.n) + '</span>' +
+        '<div class="od-field od-fill"><h2 id="sheetTitle" tabindex="-1">' + esc(p.name) + '</h2><p class="muted small">' + POS[p.pos] + ' · ' + esc(curTeam().name) + '</p></div>' +
+        '<button class="icon-btn is-outlined od-fixed" data-action="close" aria-label="Close">' + icon('x') + '</button></div>' + today +
+        '<div class="switch-row od-row"><div class="od-field od-fill"><span class="detail-main" id="availLabel">Available</span>' +
+        '<span class="muted small">' + (onField ? 'On the field now. Sub them off before marking them out.' : p.out ? 'Left off the bench and the minutes target.' : 'Turn off if they cannot make the next event.') + '</span></div>' +
+        '<span class="switch-tap od-fixed"><button class="switch" role="switch" data-action="toggle-avail" data-id="' + p.id + '" aria-checked="' + !p.out + '" aria-labelledby="availLabel"' + (onField ? ' disabled' : '') + '><span class="switch-knob"></span></button></span></div>';
+    }
+
+    /* ---------- forms ---------- */
+    const field = (name, label, control, required) =>
+      '<div class="field" data-field="' + name + '"><label for="f-' + name + '">' + label + (required ? ' <span class="req">(required)</span>' : ' <span class="req">(optional)</span>') + '</label>' + control +
+      '<p class="field-err" id="f-' + name + '-err" hidden></p></div>';
+
+    function openEventForm(preType) {
+      const type = preType || 'practice';
+      openSheet(sheetHead('Add event', '') +
+        '<form class="form" data-form="event" novalidate><div class="err-summary" role="alert" tabindex="-1" hidden></div>' +
+        '<div class="field"><label for="f-team">Team <span class="req">(required)</span></label><select id="f-team" name="team">' + TEAMS.map(t => '<option value="' + t.id + '"' + (t.id === state.team ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('') + '</select></div>' +
+        '<fieldset class="field"><legend>Type <span class="req">(required)</span></legend><div class="radio-seg">' +
+          '<label><input type="radio" name="type" value="practice"' + (type === 'practice' ? ' checked' : '') + '>Practice</label>' +
+          '<label><input type="radio" name="type" value="match"' + (type === 'match' ? ' checked' : '') + '>Match</label></div></fieldset>' +
+        '<div class="field-pair">' +
+          field('date', 'Date', '<input id="f-date" name="date" type="date" value="2026-10-08" aria-describedby="f-date-err">', true) +
+          field('time', 'Start time', '<input id="f-time" name="time" type="time" value="17:00" aria-describedby="f-time-err">', true) + '</div>' +
+        '<div id="oppWrap"' + (type === 'match' ? '' : ' hidden') + '>' + field('opp', 'Opponent', '<input id="f-opp" name="opp" type="text" autocomplete="off" aria-describedby="f-opp-err">', true) + '</div>' +
+        field('loc', 'Location', '<input id="f-loc" name="loc" type="text" autocomplete="off" aria-describedby="f-loc-err">', true) +
+        '<button class="btn btn-primary btn-block" type="submit">Save event</button></form>');
+    }
+    function openPlayerForm() {
+      openSheet(sheetHead('Add player', 'Joining ' + esc(curTeam().name)) +
+        '<form class="form" data-form="player" novalidate><div class="err-summary" role="alert" tabindex="-1" hidden></div>' +
+        field('name', 'Player name', '<input id="f-name" name="name" type="text" autocomplete="off" aria-describedby="f-name-err">', true) +
+        '<div class="field-pair">' +
+          field('num', 'Jersey number', '<input id="f-num" name="num" type="text" inputmode="numeric" autocomplete="off" aria-describedby="f-num-err">', false) +
+          '<div class="field"><label for="f-pos">Position <span class="req">(required)</span></label><select id="f-pos" name="pos">' + Object.keys(POS).map(k => '<option value="' + k + '"' + (k === 'MID' ? ' selected' : '') + '>' + POS[k] + '</option>').join('') + '</select></div></div>' +
+        '<button class="btn btn-primary btn-block" type="submit">Add to roster</button></form>');
+    }
+
+    const RULES = {
+      event: {
+        date: v => v ? '' : 'Pick a date for the event.',
+        time: v => v ? '' : 'Enter a start time, for example 5:00 PM.',
+        opp: (v, f) => f.elements.type.value === 'match' && !v.trim() ? 'Enter the opponent, or TBD if it is not known yet.' : '',
+        loc: v => v.trim() ? '' : 'Enter where it takes place, for example Twin Oaks Park.'
+      },
+      player: {
+        name: v => v.trim() ? '' : 'Enter the player’s name, for example Maya R.',
+        num: v => {
+          v = v.trim();
+          if (!v) return '';
+          if (!/^\d{1,2}$/.test(v) || Number(v) < 1) return 'Use a number from 1 to 99, or leave it blank.';
+          const taken = roster().find(p => p.n === Number(v));
+          return taken ? 'Number ' + v + ' is worn by ' + taken.name + '. Pick another.' : '';
+        }
+      }
+    };
+    const FIELD_LABEL = { date: 'Date', time: 'Start time', opp: 'Opponent', loc: 'Location', name: 'Player name', num: 'Jersey number' };
+    function validateField(form, name) {
+      const rule = RULES[form.dataset.form][name];
+      const input = form.elements[name];
+      if (!rule || !input) return '';
+      const msg = rule(input.value, form);
+      const err = $('#f-' + name + '-err', form);
+      if (msg) { err.innerHTML = icon('alert', 'icon-sm') + '<span>' + esc(msg) + '</span>'; err.hidden = false; input.setAttribute('aria-invalid', 'true'); }
+      else { err.hidden = true; err.textContent = ''; input.removeAttribute('aria-invalid'); }
+      return msg;
+    }
+    function validateForm(form) {
+      const errs = Object.keys(RULES[form.dataset.form]).map(n => ({ name: n, msg: validateField(form, n) })).filter(x => x.msg);
+      const sum = $('.err-summary', form);
+      if (errs.length) {
+        sum.innerHTML = '<strong>' + plural(errs.length, 'thing needs', 'things need') + ' fixing before this can be saved:</strong>' +
+          errs.map(e => '<button type="button" class="err-link" data-action="focus-field" data-id="' + e.name + '">' + FIELD_LABEL[e.name] + '</button>').join('');
+        sum.hidden = false;
+        if (errs.length > 1) sum.focus(); else form.elements[errs[0].name].focus();
+      } else sum.hidden = true;
+      return !errs.length;
+    }
+    function saving(form, done) {
+      const btn = $('[type="submit"]', form);
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      setTimeout(done, 450);
+    }
+    function submitForm(form) {
+      if (!validateForm(form)) return;
+      const el = form.elements;
+      if (form.dataset.form === 'event') {
+        const v = { team: el.team.value, type: el.type.value, date: el.date.value, time: el.time.value, opp: el.opp.value.trim(), loc: el.loc.value.trim() };
+        saving(form, () => {
+          EVENTS.push({ id: 'u' + (++uid), team: v.team, type: v.type, date: v.date, time: v.time, opp: v.opp, oppFrom: '', venue: v.loc, address: '' });
+          state.cal.week = weekStart(v.date);
+          state.cal.day = null;
+          closeSheet();
+          render();
+          toast((v.type === 'match' ? 'Match' : 'Practice') + ' added for ' + fmtDay(v.date) + '.');
+        });
+      } else {
+        const num = el.num.value.trim();
+        const p = { id: 'p' + (++uid), n: num ? Number(num) : null, name: el.name.value.trim(), pos: el.pos.value, sec: 0, goals: 0, out: false };
+        saving(form, () => {
+          roster().push(p);
+          if (state.team === 'stars') state.gd.bench.push(p.id);
+          state.rosterFilter = 'all';
+          closeSheet();
+          render();
+          toast(p.name + ' added to ' + curTeam().name + '.');
+        });
+      }
+    }
+
+    /* ---------- actions ---------- */
+    const A = {
+      'team': el => { state.team = el.dataset.id; state.rosterFilter = 'all'; render(); },
+      'home-day': el => { state.cal.week = weekStart(el.dataset.id); state.cal.day = el.dataset.id; state.cal.team = state.team; state.cal.type = 'all'; state.scroll.calendar = 0; location.hash = '#/calendar'; },
+      'cal-day': el => { state.cal.day = state.cal.day === el.dataset.id ? null : el.dataset.id; render(); },
+      'cal-prev': () => { state.cal.week = addDays(state.cal.week, -7); state.cal.day = null; render(); },
+      'cal-next': () => { state.cal.week = addDays(state.cal.week, 7); state.cal.day = null; render(); },
+      'cal-today': () => { state.cal.week = weekStart(TODAY); state.cal.day = null; render(); },
+      'cal-week': () => { state.cal.day = null; render(); },
+      'cal-team': el => { state.cal.team = el.dataset.id; render(); },
+      'cal-type': el => { state.cal.type = el.dataset.v; render(); },
+      'cal-clear': () => { state.cal.team = 'all'; state.cal.type = 'all'; render(); },
+      'event': el => openEvent(el.dataset.id),
+      'add-event': el => openEventForm(el.dataset.v),
+      'close': () => closeSheet(),
+      'undo': () => { const fn = undoFn; undoFn = null; toastEl.hidden = true; if (fn) fn(); },
+
+      'appearance': () => openSheet(appearanceSheet()),
+      'theme': el => { themePref = okTheme(el.dataset.v) || 'system'; themeStore.set(themePref); applyTheme(); setSheet(appearanceSheet()); },
+
+      'gd-formation': el => { setFormation(el.dataset.v); render(); announce('Formation ' + el.dataset.v + '. ' + filledCount() + ' of ' + state.gd.slots.length + ' positions filled.'); },
+      'pick': el => {
+        state.pick = state.pick === el.dataset.id ? null : el.dataset.id;
+        render();
+        if (state.pick) announce(starById(state.pick).name + ' selected. Choose a position.');
+      },
+      'slot': el => {
+        const i = Number(el.dataset.slot), x = state.gd.slots[i];
+        if (state.pick && state.pick !== x.pid) { placePlayer(state.pick, i); render(); }
+        else if (x.pid) {
+          state.pick = state.pick === x.pid ? null : x.pid;
+          render();
+          if (state.pick) announce(starById(state.pick).name + ' selected. Choose another position to swap, or move them to the bench.');
+        } else openSlotPicker(i);
+      },
+      'place': el => { placePlayer(el.dataset.id, Number(el.dataset.slot)); closeSheet(); render(); },
+      'to-bench': el => { benchPlayer(el.dataset.id); render(); },
+      'autofill': () => { autoFill(); render(); announce('Lineup filled. ' + filledCount() + ' of ' + state.gd.slots.length + ' positions filled.'); },
+      'lineup-clear': () => { clearLineup(); render(); announce('Lineup cleared.'); },
+      'kickoff': () => {
+        const g = state.gd;
+        if (g.phase !== 'pre' || filledCount() < g.slots.length) return;
+        g.phase = 'live1'; g.running = true; g.sec = 0; g.us = 0; g.them = 0;
+        state.pick = null;
+        render();
+        scrollerOf('gameday').scrollTop = 0;
+        toast('Kicked off.');
+      },
+
+      'clock-toggle': () => {
+        const g = state.gd;
+        if (g.phase === 'ft') return;
+        if (g.phase === 'ht') { g.phase = 'live2'; g.running = true; toast('2nd half under way.'); }
+        else g.running = !g.running;
+        render();
+      },
+      'goal-us': () => openScorer(),
+      'goal-them': () => {
+        const g = state.gd; g.them += 1; render();
+        toast('Goal for ' + EVENTS.find(e => e.today).opp + ' · ' + fmtClock(g.sec), () => { g.them = Math.max(0, g.them - 1); render(); toast('Goal removed.'); });
+      },
+      'scorer': el => {
+        const g = state.gd, p = el.dataset.id ? starById(el.dataset.id) : null;
+        g.us += 1; if (p) p.goals += 1;
+        closeSheet(); render();
+        toast('Goal: ' + (p ? p.name + ' · ' : '') + fmtClock(g.sec), () => { g.us = Math.max(0, g.us - 1); if (p) p.goals = Math.max(0, p.goals - 1); render(); toast('Goal removed.'); });
+      },
+      'gd-view': el => { state.gd.view = el.dataset.v; render(); },
+      'sub-in': el => openSubIn(el.dataset.id),
+      'sub-out': el => openSubOut(Number(el.dataset.slot)),
+      'swap': el => doSwap(el.dataset.id, Number(el.dataset.slot)),
+      'suggest-swap': () => { const s = fair().suggestion; if (s) doSwap(s.inId, s.slot); },
+
+      'drill': el => { const i = Number(el.dataset.i); if (layer.hidden) openSheet(drillSheet(i)); else setSheet(drillSheet(i)); },
+      'drill-dur': el => { const i = Number(el.dataset.i), b = state.plan[i]; b.min = Math.min(30, Math.max(5, b.min + Number(el.dataset.v))); setSheet(drillSheet(i)); render(); },
+      'drill-remove': el => { setSheet(drillSheet(Number(el.dataset.i), true)); const k = $('.confirm .btn-secondary', sheet); if (k) k.focus(); },
+      'drill-remove-yes': el => { const b = state.plan.splice(Number(el.dataset.i), 1)[0]; closeSheet(); render(); toast(b.title + ' removed from the plan.'); },
+      'block-up': el => { const i = Number(el.dataset.i); if (i > 0) { const p = state.plan; p.splice(i - 1, 0, p.splice(i, 1)[0]); render(); focusBlock('block-up', i - 1, 'block-down'); } },
+      'block-down': el => { const i = Number(el.dataset.i), p = state.plan; if (i < p.length - 1) { p.splice(i + 1, 0, p.splice(i, 1)[0]); render(); focusBlock('block-down', i + 1, 'block-up'); } },
+      'add-drill': () => openDrillPicker(),
+      'pick-drill': el => {
+        const b = planItem(el.dataset.id); state.plan.push(b);
+        const total = state.plan.reduce((a, x) => a + x.min, 0), diff = total - SESSION_MIN;
+        closeSheet(); render();
+        scrollerOf('practice').scrollTop = scrollerOf('practice').scrollHeight;
+        toast(b.title + ' added. Plan is ' + total + ' min' + (diff ? ', ' + Math.abs(diff) + ' ' + (diff > 0 ? 'over' : 'under') : '') + '.');
+      },
+
+      'roster-filter': el => { state.rosterFilter = el.dataset.v; render(); },
+      'player': el => openSheet(playerSheet(el.dataset.id)),
+      'toggle-avail': el => {
+        const p = roster().find(x => x.id === el.dataset.id);
+        if (!p) return;
+        p.out = !p.out;
+        if (state.team === 'stars') {
+          const b = state.gd.bench, i = b.indexOf(p.id);
+          if (p.out) state.gd.slots.forEach(x => { if (x.pid === p.id) x.pid = null; });
+          if (p.out && i >= 0) b.splice(i, 1);
+          if (!p.out && i < 0 && !state.gd.slots.some(s => s.pid === p.id)) b.push(p.id);
+        }
+        setSheet(playerSheet(p.id));
+        render();
+      },
+      'add-player': () => openPlayerForm(),
+      'focus-field': el => { const f = el.closest('form'); if (f && f.elements[el.dataset.id]) f.elements[el.dataset.id].focus(); }
+    };
+    // After a reorder the moved drill keeps focus; fall back to the other arrow at the list ends.
+    function focusBlock(action, i, fallback) {
+      const q = a => $('[data-action="' + a + '"][data-i="' + i + '"]', $('#body-practice'));
+      const el = q(action);
+      const target = el && !el.disabled ? el : q(fallback);
+      if (target) target.focus({ preventScroll: true });
+    }
+
+    document.addEventListener('click', ev => {
+      const el = ev.target.closest('[data-action]');
+      if (!el || el.disabled || suppressClick) return;
+      const fn = A[el.dataset.action];
+      if (fn) fn(el, ev);
+    });
+    sheet.addEventListener('submit', ev => { ev.preventDefault(); submitForm(ev.target); });
+    sheet.addEventListener('focusout', ev => {
+      const f = ev.target.form;
+      if (f && f.dataset.form && ev.target.name && RULES[f.dataset.form][ev.target.name]) validateField(f, ev.target.name);
+    });
+    sheet.addEventListener('change', ev => {
+      if (ev.target.name === 'type') {
+        const wrap = $('#oppWrap', sheet);
+        wrap.hidden = ev.target.value !== 'match';
+        if (wrap.hidden) validateField(ev.target.form, 'opp');
+      }
+    });
+    document.addEventListener('keydown', ev => {
+      if (layer.hidden) return;
+      if (ev.key === 'Escape') { ev.preventDefault(); closeSheet(); return; }
+      if (ev.key !== 'Tab') return;
+      const items = $$('button, a[href], input, select, [tabindex="0"]', sheet).filter(x => !x.disabled && x.offsetParent !== null);
+      if (!items.length) { ev.preventDefault(); return; }
+      const first = items[0], last = items[items.length - 1];
+      if (!sheet.contains(document.activeElement)) { ev.preventDefault(); first.focus(); }
+      else if (ev.shiftKey && (document.activeElement === first || document.activeElement === $('#sheetTitle', sheet))) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+    });
+
+    // Comparison boards only: ?state=live opens 22 minutes into the match (no visible control in the app).
+    if (new URLSearchParams(location.search).get('state') === 'live') {
+      const g = state.gd;
+      g.formation = '2-3-1';
+      g.slots = [['GK', 's1'], ['DEF', 's4'], ['DEF', 's5'], ['MID', 's8'], ['MID', 's10'], ['MID', 's7'], ['FWD', 's9']].map(x => ({ pos: x[0], pid: x[1] }));
+      g.bench = ['s3', 's6', 's11', 's12'];
+      const secs = { s1: 1334, s4: 1334, s5: 734, s8: 1334, s10: 1034, s7: 734, s9: 1334, s3: 600, s6: 600, s11: 300, s12: 0 };
+      ROSTERS.stars.forEach(p => { if (secs[p.id] != null) p.sec = secs[p.id]; });
+      starById('s9').goals = 1;
+      g.phase = 'live1'; g.running = true; g.sec = 1334; g.us = 1; g.them = 0;
+      const statusClock = document.querySelector('.status-time');
+      if (statusClock) statusClock.textContent = '11:02';
+    }
+
+    window.addEventListener('hashchange', onRoute);
+    onRoute();
+    setInterval(tick, 1000);
+  })();
+  </script>
+</body>
+</html>

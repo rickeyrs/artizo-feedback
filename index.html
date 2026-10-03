@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Artizo Sport — directions for feedback</title>
+  <style>
+    @font-face { font-family: "Newsreader"; src: url("Newsreader-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Newsreader"; src: url("Newsreader-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-700.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+
+    /* Board uses the Artizo Sport design-system roles (values from tokens.css). */
+    :root {
+      --az-font-display: 'Newsreader', Georgia, serif;
+      --az-font-ui: 'Source Sans 3', system-ui, sans-serif;
+      --az-canvas: #F7F3E8; --az-surface: #FCFAF3; --az-border: #5E6976; --az-hairline: #DDD5C2;
+      --az-text-primary: #242A33; --az-text-secondary: #3D4855; --az-text-muted: #666D79; --az-text-accent: #A03E1E;
+      --az-selected: #242A33; --az-on-selected: #FCFAF3;
+      --az-fill-subtle: #EDE6D6;
+      --az-space-1: 4px; --az-space-2: 8px; --az-space-3: 12px; --az-space-4: 16px; --az-space-6: 24px; --az-space-8: 32px; --az-space-12: 48px;
+      --az-radius-lg: 12px; --az-radius-xl: 18px;
+      --az-tap-min: 48px;
+      /* Handset as embedded: a 410 x 864 phone centred in a 482px-wide page. */
+      --frame-w: 482px;
+      --frame-h: 864px;
+      --scale: .5; /* refined by the script below */
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --az-canvas: #1B2027; --az-surface: #242A33; --az-border: #838B96; --az-hairline: #2F3742;
+      --az-text-primary: #F7F3E8; --az-text-secondary: #A8B2BD; --az-text-muted: #838B96; --az-text-accent: #E28A61;
+      --az-selected: #F7F3E8; --az-on-selected: #1B2027;
+      --az-fill-subtle: #2F3742;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: var(--az-font-ui);
+      font-size: 18px;
+      line-height: 28px;
+      color: var(--az-text-primary);
+      background: var(--az-canvas);
+      font-variant-numeric: lining-nums tabular-nums;
+      -webkit-font-smoothing: antialiased;
+    }
+    :focus-visible { outline: 3px solid var(--az-text-primary); outline-offset: 2px; }
+
+    .head { display: grid; gap: var(--az-space-6); padding: var(--az-space-8) var(--az-space-8) var(--az-space-6); border-bottom: 1px solid var(--az-hairline); }
+    .head-text { display: grid; gap: var(--az-space-2); max-width: 76ch; }
+    .eyebrow { margin: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 1.68px; text-transform: uppercase; color: var(--az-text-secondary); }
+    h1 { margin: 0; font-family: var(--az-font-display); font-size: 40px; line-height: 46px; font-weight: 600; letter-spacing: -0.95px; }
+    .lede { margin: 0; color: var(--az-text-secondary); }
+
+    .controls { display: flex; flex-wrap: wrap; gap: var(--az-space-4) var(--az-space-6); margin: 0; padding: 0; border: 0; }
+    .control { display: grid; gap: var(--az-space-1); }
+    .control-label { font-size: 15px; line-height: 21px; font-weight: 600; color: var(--az-text-secondary); }
+    .seg { display: flex; gap: var(--az-space-1); padding: var(--az-space-1); border-radius: var(--az-radius-lg); background: var(--az-fill-subtle); }
+    .seg button { min-height: var(--az-tap-min); padding: 0 var(--az-space-4); border: 0; border-radius: var(--az-space-2); background: transparent; color: var(--az-text-secondary); font: inherit; font-size: 15px; line-height: 21px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .seg button[aria-pressed="true"] { background: var(--az-selected); color: var(--az-on-selected); }
+
+    .rows { display: grid; gap: var(--az-space-8); padding: var(--az-space-8); }
+    .row { display: grid; gap: var(--az-space-4); padding-bottom: var(--az-space-8); border-bottom: 1px solid var(--az-hairline); }
+    .row:last-child { border-bottom: 0; padding-bottom: 0; }
+    .row-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--az-space-2) var(--az-space-4); }
+    .row-letter { font-family: var(--az-font-display); font-size: 40px; line-height: 46px; font-weight: 600; }
+    .row-name { margin: 0; font-family: var(--az-font-display); font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.26px; }
+    .row-note { margin: 0; font-size: 16px; line-height: 24px; color: var(--az-text-secondary); }
+    .shots { display: grid; grid-template-columns: repeat(auto-fill, calc(var(--frame-w) * var(--scale))); justify-content: start; gap: var(--az-space-6) var(--az-space-2); margin: 0; padding: 0; list-style: none; }
+    .shot { margin: 0; display: grid; gap: var(--az-space-2); justify-items: center; }
+    .shot figcaption { display: block; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 1.68px; text-transform: uppercase; color: var(--az-text-secondary); text-align: center; }
+    .frame { display: block; width: calc(var(--frame-w) * var(--scale)); height: calc(var(--frame-h) * var(--scale)); }
+    .frame iframe { display: block; width: var(--frame-w); height: var(--frame-h); border: 0; background: transparent; transform: scale(var(--scale)); transform-origin: top left; }
+
+    .feedback-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--az-space-4) var(--az-space-6); }
+    .field { display: grid; gap: var(--az-space-1); min-width: 0; }
+    .field label { font-size: 15px; line-height: 21px; font-weight: 600; color: var(--az-text-secondary); }
+    .field input, .note textarea { width: 100%; padding: var(--az-space-3); border: 1.5px solid var(--az-border); border-radius: var(--az-radius-lg); background: var(--az-surface); color: var(--az-text-primary); font: inherit; font-size: 16px; line-height: 24px; }
+    .field input { min-height: var(--az-tap-min); width: 280px; max-width: 100%; }
+    .actions { display: flex; flex-wrap: wrap; gap: var(--az-space-2); }
+    .btn { min-height: var(--az-tap-min); padding: 0 var(--az-space-6); border-radius: 9999px; font: inherit; font-size: 15px; line-height: 21px; font-weight: 600; text-transform: uppercase; cursor: pointer; }
+    .btn-primary { border: 0; background: #C24E28; color: #FFFFFF; }
+    .btn-secondary { border: 1.5px solid var(--az-border); background: transparent; color: var(--az-text-primary); }
+    :root[data-theme="dark"] .btn-primary { background: #E28A61; color: #1B2027; }
+    .status { margin: 0; min-height: 24px; font-size: 16px; line-height: 24px; color: var(--az-text-secondary); }
+    .welcome { display: grid; gap: var(--az-space-2); max-width: 720px; padding: var(--az-space-4) var(--az-space-6); border-radius: var(--az-radius-xl); background: var(--az-surface); border: 1px solid var(--az-hairline); }
+    .welcome h2 { margin: 0; font-family: var(--az-font-display); font-size: 22px; line-height: 28px; font-weight: 600; }
+    .welcome ol { margin: 0; padding-left: var(--az-space-6); display: grid; gap: var(--az-space-1); }
+    .welcome li { padding-left: var(--az-space-1); }
+    .finish { display: grid; gap: var(--az-space-6); padding: var(--az-space-8); border-top: 1px solid var(--az-hairline); background: var(--az-surface); }
+    .finish h2 { margin: 0; font-family: var(--az-font-display); font-size: 33px; line-height: 38px; font-weight: 600; letter-spacing: -0.5px; }
+    .pick { display: grid; gap: var(--az-space-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+    .pick legend { padding: 0; margin-bottom: var(--az-space-2); font-size: 18px; line-height: 28px; font-weight: 600; }
+    .pick-options { display: flex; flex-wrap: wrap; gap: var(--az-space-2); }
+    .pick-options input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .pick-options label { display: flex; align-items: center; gap: var(--az-space-2); min-height: var(--az-tap-min); padding: 0 var(--az-space-4); border: 1.5px solid var(--az-border); border-radius: 9999px; font-size: 16px; line-height: 24px; font-weight: 600; color: var(--az-text-primary); cursor: pointer; }
+    .pick-options label b { font-family: var(--az-font-display); font-size: 20px; font-weight: 600; }
+    .pick-options input:checked + label { background: var(--az-selected); border-color: var(--az-selected); color: var(--az-on-selected); }
+    .pick-options input:focus-visible + label { outline: 3px solid var(--az-text-primary); outline-offset: 2px; }
+    .note { display: grid; gap: var(--az-space-1); max-width: 720px; }
+    .note label { font-size: 15px; line-height: 21px; font-weight: 600; color: var(--az-text-secondary); }
+    .note textarea { min-height: 96px; resize: vertical; }
+    .note-hint { margin: 0; font-size: 14px; line-height: 20px; color: var(--az-text-muted); }
+    .feedback { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--az-space-4) var(--az-space-8); }
+    .feedback .note { flex: 1 1 320px; }
+    .rating { display: grid; gap: var(--az-space-1); margin: 0; padding: 0; border: 0; min-width: 0; }
+    .rating legend { padding: 0; margin-bottom: var(--az-space-1); font-size: 15px; line-height: 21px; font-weight: 600; color: var(--az-text-secondary); }
+    .stars { display: flex; gap: var(--az-space-1); padding: var(--az-space-1); border-radius: var(--az-radius-lg); background: var(--az-fill-subtle); width: max-content; }
+    .stars input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .stars label { display: grid; place-items: center; width: var(--az-tap-min); height: var(--az-tap-min); border-radius: var(--az-space-2); font-size: 18px; font-weight: 700; color: var(--az-text-secondary); cursor: pointer; }
+    .stars input:checked + label { background: var(--az-selected); color: var(--az-on-selected); }
+    .stars input:focus-visible + label { outline: 3px solid var(--az-text-primary); outline-offset: 2px; }
+    .scale-ends { display: flex; justify-content: space-between; font-size: 14px; line-height: 20px; color: var(--az-text-muted); }
+
+    @media (hover: hover) {
+      .btn:hover { opacity: .88; }
+      .seg button:not([aria-pressed="true"]):hover { color: var(--az-text-primary); }
+      .pick-options input:not(:checked) + label:hover { background: var(--az-fill-subtle); }
+      .stars input:not(:checked) + label:hover { color: var(--az-text-primary); background: var(--az-surface); }
+    }
+    @media (max-width: 720px) {
+      .head, .rows, .finish { padding-inline: var(--az-space-4); }
+      .welcome { padding-inline: var(--az-space-4); }
+      .finish h2 { font-size: 26px; line-height: 32px; }
+      .actions .btn { flex: 1 1 100%; }
+      h1 { font-size: 33px; line-height: 38px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="head">
+    <div class="head-text">
+      <p class="eyebrow">Artizo Sport · directions for feedback</p>
+      <h1>Six directions, side by side</h1>
+      <p class="lede">Every phone is a working prototype of a youth-soccer coaching app. Tap, scroll and drag inside any of them.</p>
+    </div>
+    <section class="welcome" aria-labelledby="welcome-title">
+      <h2 id="welcome-title">Thanks for helping. Three steps:</h2>
+      <ol>
+        <li>Try the phones in each row, A to F.</li>
+        <li>Rate each letter from 1 to 5 and add a note if you like.</li>
+        <li>At the bottom, pick your favourite letter and press Email my feedback.</li>
+      </ol>
+    </section>
+    <fieldset class="controls">
+      <legend class="vh" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Board settings</legend>
+      <div class="control">
+        <span class="control-label" id="lbl-layout">Layout for C to F</span>
+        <div class="seg" role="group" aria-labelledby="lbl-layout">
+          <button type="button" data-set="layout" data-value="pdf" aria-pressed="true">PDF layouts</button>
+          <button type="button" data-set="layout" data-value="current" aria-pressed="false">Today's layouts</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control-label" id="lbl-type">Fonts for C to E</span>
+        <div class="seg" role="group" aria-labelledby="lbl-type">
+          <button type="button" data-set="type" data-value="bold" aria-pressed="true">Bold sans</button>
+          <button type="button" data-set="type" data-value="system" aria-pressed="false">System fonts</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control-label" id="lbl-theme">Appearance</span>
+        <div class="seg" role="group" aria-labelledby="lbl-theme">
+          <button type="button" data-set="theme" data-value="light" aria-pressed="true">Light</button>
+          <button type="button" data-set="theme" data-value="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control-label" id="lbl-screens">Screens</span>
+        <div class="seg" role="group" aria-labelledby="lbl-screens">
+          <button type="button" data-set="screens" data-value="pdf" aria-pressed="true">PDF three</button>
+          <button type="button" data-set="screens" data-value="all" aria-pressed="false">All six</button>
+        </div>
+      </div>
+    </fieldset>
+  </header>
+
+  <main class="rows" id="rows" aria-live="polite"></main>
+
+  <section class="finish" aria-labelledby="finish-title">
+    <h2 id="finish-title">Your pick and send</h2>
+    <fieldset class="pick">
+      <legend>If you could only have one, which letter would you pick?</legend>
+      <div class="pick-options" id="pick-options"></div>
+    </fieldset>
+    <div class="feedback-bar">
+      <div class="field">
+        <label for="tester-name">Your name (optional)</label>
+        <input id="tester-name" type="text" autocomplete="name" />
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="email-feedback">Email my feedback</button>
+        <button type="button" class="btn btn-secondary" id="copy-feedback">Copy my feedback</button>
+        <button type="button" class="btn btn-secondary" id="download-feedback">Download as text</button>
+      </div>
+      <p class="status" id="feedback-status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <noscript><p style="padding:16px">This board needs JavaScript turned on to load the phones. You can still open app.html and original-direction.html directly.</p></noscript>
+
+  <script>
+  (function () {
+    'use strict';
+    var VERSIONS = [
+      { letter: 'A', name: 'Original direction', note: 'Cool grey, navy and copper. Bricolage Grotesque and Inter.', file: 'original-direction.html', fixed: true },
+      { letter: 'B', name: 'Design system today', note: 'Cream and slate from DESIGN.md. Newsreader and Source Sans 3.', file: 'app.html', fixed: true },
+      { letter: 'C', name: 'Pitch green', note: 'Green hero, white button, lime clock, white kits.', file: 'app.html', palette: 'pitch' },
+      { letter: 'D', name: 'Navy and lime', note: 'Navy hero, lime button and clock, lime kits.', file: 'app.html', palette: 'navy' },
+      { letter: 'E', name: 'Charcoal and orange', note: 'Charcoal hero, orange button and clock, red kits.', file: 'app.html', palette: 'ember' },
+      { letter: 'F', name: 'Cream design system', note: 'Your design system with the PDF layout option. Always Newsreader and Source Sans 3.', file: 'app.html', palette: 'cream' }
+    ];
+    var SCREENS = {
+      pdf: [
+        { route: 'home', name: 'Home' },
+        { route: 'gameday', name: 'Gameday · live', extra: '&state=live' },
+        { route: 'gameday', name: 'Lineup builder' }
+      ],
+      all: [
+        { route: 'home', name: 'Home' },
+        { route: 'calendar', name: 'Calendar' },
+        { route: 'gameday', name: 'Lineup builder' },
+        { route: 'gameday', name: 'Gameday · live', extra: '&state=live' },
+        { route: 'practice', name: 'Practice' },
+        { route: 'team', name: 'Team' }
+      ]
+    };
+    var settings = { layout: 'pdf', type: 'bold', theme: 'light', screens: 'pdf' };
+    var FRAME_W = 482, GAP = 8;
+    var rows = document.getElementById('rows');
+
+    function src(v, sc) {
+      var q = 'embed=1&theme=' + settings.theme;
+      if (!v.fixed) q += '&palette=' + v.palette + '&layout=' + settings.layout + '&type=' + settings.type;
+      return v.file + '?' + q + (sc.extra || '') + '#/' + sc.route;
+    }
+
+    // Notes are saved in this browser only, then copied or downloaded and sent back by the tester.
+    var NOTE_KEY = 'artizo-feedback:';
+    function store(key, value) { try { localStorage.setItem(NOTE_KEY + key, value); } catch (e) {} }
+    function recall(key) { try { return localStorage.getItem(NOTE_KEY + key) || ''; } catch (e) { return ''; } }
+    function ratingBlock(v) {
+      var out = '<fieldset class="rating"><legend>Rate ' + v.letter + '</legend><div class="stars">';
+      for (var n = 1; n <= 5; n++) {
+        var id = 'rate-' + v.letter + '-' + n;
+        out += '<input type="radio" id="' + id + '" name="rate-' + v.letter + '" value="' + n + '" data-rate="' + v.letter + '"><label for="' + id + '" aria-label="' + n + ' out of 5">' + n + '</label>';
+      }
+      return out + '</div><div class="scale-ends" aria-hidden="true"><span>Not for me</span><span>Love it</span></div></fieldset>';
+    }
+    function noteBlock(v) {
+      return '<div class="note"><label for="note-' + v.letter + '">What works or doesn\u2019t in ' + v.letter + '?</label>' +
+        '<textarea id="note-' + v.letter + '" data-note="' + v.letter + '" rows="3" aria-describedby="note-hint-' + v.letter + '"></textarea>' +
+        '<p class="note-hint" id="note-hint-' + v.letter + '">Saved in this browser as you type.</p></div>';
+    }
+    function restoreNotes() {
+      rows.querySelectorAll('[data-note]').forEach(function (el) { el.value = recall(el.getAttribute('data-note')); });
+      rows.querySelectorAll('[data-rate]').forEach(function (el) { el.checked = recall('rate:' + el.getAttribute('data-rate')) === el.value; });
+    }
+    rows.addEventListener('change', function (e) {
+      var el = e.target;
+      if (el && el.hasAttribute && el.hasAttribute('data-rate')) store('rate:' + el.getAttribute('data-rate'), el.value);
+    });
+    rows.addEventListener('input', function (e) {
+      var el = e.target;
+      if (el && el.hasAttribute && el.hasAttribute('data-note')) store(el.getAttribute('data-note'), el.value);
+    });
+    var nameEl = document.getElementById('tester-name');
+    nameEl.value = recall('name');
+    nameEl.addEventListener('input', function () { store('name', nameEl.value); });
+
+    var pickWrap = document.getElementById('pick-options');
+    pickWrap.innerHTML = VERSIONS.map(function (v) {
+      return '<input type="radio" name="overall-pick" id="pick-' + v.letter + '" value="' + v.letter + '"><label for="pick-' + v.letter + '"><b>' + v.letter + '</b>' + v.name + '</label>';
+    }).join('');
+    pickWrap.querySelectorAll('input').forEach(function (el) {
+      el.checked = recall('pick') === el.value;
+      el.addEventListener('change', function () { store('pick', el.value); });
+    });
+    function pickText() {
+      var l = recall('pick'), v = VERSIONS.filter(function (x) { return x.letter === l; })[0];
+      return v ? v.letter + ' · ' + v.name : 'Not chosen';
+    }
+    function feedbackText() {
+      var lines = ['Artizo Sport feedback', 'Name: ' + (nameEl.value.trim() || 'Not given'), 'Date: ' + new Date().toLocaleString(),
+        'Board settings: layout ' + settings.layout + ', fonts ' + settings.type + ', appearance ' + settings.theme, '', 'Overall pick: ' + pickText(), ''];
+      VERSIONS.forEach(function (v) {
+        var r = recall('rate:' + v.letter);
+        lines.push(v.letter + ' · ' + v.name + ' (' + (r ? r + '/5' : 'not rated') + '): ' + (recall(v.letter).trim() || 'No comment'));
+      });
+      return lines.join('\n');
+    }
+    var statusEl = document.getElementById('feedback-status');
+    function say(msg) { statusEl.textContent = ''; setTimeout(function () { statusEl.textContent = msg; }, 30); }
+    var FEEDBACK_TO = 'rickeyrs82@gmail.com';
+    document.getElementById('email-feedback').addEventListener('click', function () {
+      var who = nameEl.value.trim();
+      window.location.href = 'mailto:' + FEEDBACK_TO + '?subject=' + encodeURIComponent('Artizo Sport feedback' + (who ? ' from ' + who : '')) + '&body=' + encodeURIComponent(feedbackText());
+      say('Your email app should open with the feedback filled in. If it doesn\u2019t, use Copy my feedback and send it to ' + FEEDBACK_TO + '.');
+    });
+    document.getElementById('copy-feedback').addEventListener('click', function () {
+      var text = feedbackText();
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        say(ok ? 'Feedback copied. Paste it into an email or message.' : 'Copy did not work here. Use Download as text instead.');
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { say('Feedback copied. Paste it into an email or message.'); }, fallback);
+      } else fallback();
+    });
+    document.getElementById('download-feedback').addEventListener('click', function () {
+      var blob = new Blob([feedbackText()], { type: 'text/plain' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'artizo-feedback' + (nameEl.value.trim() ? '-' + nameEl.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') : '') + '.txt';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      say('Feedback downloaded.');
+    });
+
+    function render() {
+      var screens = SCREENS[settings.screens];
+      rows.innerHTML = VERSIONS.map(function (v) {
+        return '<section class="row" aria-labelledby="row-' + v.letter + '">' +
+          '<div class="row-head"><span class="row-letter" aria-hidden="true">' + v.letter + '</span>' +
+          '<h2 class="row-name" id="row-' + v.letter + '">' + v.letter + ' · ' + v.name + '</h2>' +
+          '<p class="row-note">' + v.note + '</p></div>' +
+          '<ul class="shots">' + screens.map(function (sc) {
+            return '<li><figure class="shot"><span class="frame"><iframe loading="lazy" title="' + v.letter + ', ' + v.name + ': ' + sc.name + '" src="' + src(v, sc) + '"></iframe></span>' +
+              '<figcaption>' + sc.name + '</figcaption></figure></li>';
+          }).join('') + '</ul><div class="feedback">' + ratingBlock(v) + noteBlock(v) + '</div></section>';
+      }).join('');
+      restoreNotes();
+      fit();
+    }
+
+    // Fit one row of phones to the window; below a readable size, phones wrap.
+    function fit() {
+      var count = SCREENS[settings.screens].length;
+      var style = getComputedStyle(rows);
+      var w = rows.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      var s = (w - GAP * (count - 1)) / count / FRAME_W;
+      s = Math.max(0.44, Math.min(0.8, s));
+      if (w < FRAME_W * s) s = w / FRAME_W;
+      document.documentElement.style.setProperty('--scale', s.toFixed(3));
+    }
+
+    document.querySelectorAll('[data-set]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-set');
+        settings[key] = btn.getAttribute('data-value');
+        document.querySelectorAll('[data-set="' + key + '"]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+        if (key === 'theme') document.documentElement.dataset.theme = settings.theme;
+        render();
+      });
+    });
+
+    window.addEventListener('resize', fit);
+    render();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "artizo-feedback-site/index.html",
+  "entry": "artizo-feedback-site/index.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-10-03T02:50:07.457Z",
+  "updatedAt": "2026-10-03T02:50:07.457Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}
