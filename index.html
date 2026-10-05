@@ -277,7 +277,7 @@
     }
     function feedbackText() {
       var lines = ['Artizo Sport feedback', 'Name: ' + (nameEl.value.trim() || 'Not given'), 'Date: ' + new Date().toLocaleString(),
-        'Board settings: layout ' + settings.layout + , appearance ' + settings.theme, '', 'Overall pick: ' + pickText(), ''];
+        'Board settings: layout ' + settings.layout + ', appearance ' + settings.theme, '', 'Overall pick: ' + pickText(), ''];
       VERSIONS.forEach(function (v) {
         var r = recall('rate:' + v.letter);
         lines.push(v.letter + ' · ' + v.name + ' (' + (r ? r + '/5' : 'not rated') + '): ' + (recall(v.letter).trim() || 'No comment'));
