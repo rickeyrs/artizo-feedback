@@ -8,13 +8,18 @@
     (function () {
       var d = document.documentElement, q = new URLSearchParams(location.search), t = q.get('theme'), saved = null;
       try { saved = localStorage.getItem('artizo-theme'); } catch (e) {}
-      if (t !== 'light' && t !== 'dark') t = (saved === 'light' || saved === 'dark') ? saved : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      d.dataset.theme = t === 'dark' ? 'dark' : 'indoor';
+      if (t !== 'light' && t !== 'dark' && t !== 'contrast') t = (saved === 'light' || saved === 'dark' || saved === 'contrast') ? saved : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      d.dataset.theme = t === 'dark' ? 'dark' : (t === 'contrast' ? 'outdoor' : 'indoor');
       if (q.get('embed') === '1') d.classList.add('is-embed');
       var pal = q.get('palette');
-      if (pal === 'pitch' || pal === 'navy' || pal === 'ember' || pal === 'cream') d.dataset.palette = pal;
+      if (pal === 'pitch' || pal === 'navy' || pal === 'ember' || pal === 'cream' || pal === 'blend') d.dataset.palette = pal;
+      // The app's own look is the design system (G, final direction). palette=ds shows the earlier cream system (B) for comparison.
+      if (!pal) { d.dataset.palette = 'blend'; d.dataset.hero = 'black'; d.dataset.accent = 'green'; }
       if (q.get('layout') === 'pdf') d.dataset.layout = 'pdf';
-      if (q.get('type') === 'bold') d.dataset.type = 'bold';
+      var acc = q.get('accent');
+      if (acc && ['original','oranje','kit','bright','yellowcard','green','mint','red','blue'].indexOf(acc) >= 0) d.dataset.accent = acc;
+      var hero = q.get('hero');
+      if (hero && hero === 'charcoal' || hero === 'black') d.dataset.hero = hero;
     })();
   </script>
   <style>
@@ -74,7 +79,7 @@
     @font-face { font-family: "Newsreader"; src: url("Newsreader-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
     @font-face { font-family: "Newsreader"; src: url("Newsreader-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
     @font-face { font-family: "Newsreader"; src: url("Newsreader-700.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Archivo"; src: url("assets/fonts/archivo-latin.woff2") format("woff2"); font-weight: 700 800; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Archivo Var"; src: url("assets/fonts/archivo-var-latin.woff2") format("woff2"); font-weight: 100 900; font-stretch: 62% 125%; font-style: normal; font-display: swap; }
     @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
     @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-700.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
@@ -637,7 +642,7 @@
     .switch { position: relative; display: block; width: 56px; height: 32px; border-radius: var(--az-radius-full); transition: background-color var(--az-t-small) var(--az-ease-out); }
     .sheet .switch { background: var(--az-border); }
     .switch-knob { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--az-knob); transition: transform var(--az-t-small) var(--az-ease-out); }
-    .sheet .switch[aria-checked="true"] { background: var(--az-on-target); }
+    .sheet .switch[aria-checked="true"] { background: var(--az-ok-fill, var(--az-on-target)); }
     .switch[aria-checked="true"] .switch-knob { transform: translateX(24px); }
     .switch-tap { display: grid; place-items: center; min-width: 56px; min-height: var(--az-tap); }
 
@@ -741,11 +746,82 @@
       --az-section-bar: #A63F1E; --az-on-section-bar: #F7F3E8; --az-tray: #262628; --az-on-tray: #FFFFFF;
       --az-fill-subtle: #2C2C2F; --az-jersey: #C8402A; --az-on-jersey: #FFFFFF; --az-jersey-line: #FFFFFF;
     }
-    /* Bold sans: Archivo for display roles on the three new palettes. Cream always keeps the design-system faces. */
-    :root[data-type="bold"][data-palette="pitch"], :root[data-type="bold"][data-palette="navy"], :root[data-type="bold"][data-palette="ember"] {
-      --az-font-display: 'Archivo', 'Source Sans 3', system-ui, sans-serif;
-      --az-w-title: 800; --az-w-display-md: 800; --az-w-display-lg: 800; --az-w-clock: 800;
-      --az-track-title: -0.4px; --az-track-display-md: -0.9px; --az-track-display-lg: -1.2px; --az-track-clock: -1.6px;
+
+    /* Blend (G): A's cool ground, density and copper; B's slate ink, body face, components and blue kit; D's navy hero and Archivo display; a bright orange (not the design-system orange) for the action and clock. */
+    :root[data-palette="blend"] {
+      --az-canvas: #F3F5F8; --az-surface: #FFFFFF; --az-hairline: #DEE2EA; --az-border: #5E6976;
+      --az-text-primary: #242A33; --az-text-secondary: #3D4855; --az-text-muted: #5E6676; --az-text-accent: #1F2A4C;
+      --az-action: #FF8C1A; --az-on-action: #121A33; --az-action-edge: #121A33; --az-selected: #242A33; --az-on-selected: #FFFFFF;
+      --az-hero: #0F1631; --az-on-hero: #FFFFFF; --az-on-hero-muted: #AEB6CE; --az-hero-tile: #1B2446; --az-hero-accent: #FF8C1A;
+      --az-hero-action: #FF8C1A; --az-on-hero-action: #121A33; --az-clock: #FF8C1A;
+      --az-section-bar: #0F1631; --az-on-section-bar: #FFFFFF; --az-tray: #0F1631; --az-on-tray: #FFFFFF;
+      --az-fill-subtle: #E6E9EF; --az-jersey: #0A72D0; --az-on-jersey: #FFFFFF;
+      --az-font-display: 'Archivo Var', 'Source Sans 3', system-ui, sans-serif;
+      --az-w-title: 500; --az-w-display-md: 500; --az-w-display-lg: 600; --az-w-clock: 600;
+      --az-track-title: -0.2px; --az-track-display-md: -0.5px; --az-track-display-lg: -0.8px; --az-track-clock: -1px;
+      --az-fs-body: 17px; --az-lh-body: 26px;
+      --az-button-height: 52px; --az-card-gap: 8px; --az-hero-padding: 16px; --az-card-radius: 16px; --az-hero-radius: 20px;
+    }
+    :root[data-palette="blend"][data-theme="dark"] {
+      --az-canvas: #0E1220; --az-surface: #171D2E; --az-hairline: #252C40; --az-border: #7D86A0;
+      --az-text-primary: #EEF1F6; --az-text-secondary: #AEB6CE; --az-text-muted: #858DA6; --az-text-accent: var(--az-action);
+      --az-action: #FF8C1A; --az-on-action: #0B1020; --az-action-edge: transparent; --az-selected: #EEF1F6; --az-on-selected: #0E1220;
+      --az-hero: #1A2342; --az-on-hero: #FFFFFF; --az-on-hero-muted: #AEB6CE; --az-hero-tile: #171D2E; --az-hero-accent: #FF8C1A;
+      --az-hero-action: #FF8C1A; --az-on-hero-action: #121A33; --az-clock: #FF8C1A;
+      --az-section-bar: #26325A; --az-on-section-bar: #FFFFFF; --az-tray: #1A2342; --az-on-tray: #FFFFFF;
+      --az-fill-subtle: #252C40; --az-jersey: #2E9BFF; --az-on-jersey: #0E1220;
+    }
+
+    /* The app's type: lighter Archivo headings, with the clock and score numerals at Archivo's 75% width, weight 600. */
+    :root[data-palette="blend"] :is(.clock, .sb-score, .stat-num, .hero-tile-num) { font-family: 'Archivo Var', 'Source Sans 3', sans-serif; font-stretch: 75%; font-weight: 600; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; }
+    /* Accent options for G (blend), chosen with ?accent=; Kit orange #FF8C1A is the default. Same value in light and dark. */
+    :root[data-palette="blend"][data-accent="original"] { --az-action: #FF7A1A; --az-hero-accent: #FF7A1A; --az-hero-action: #FF7A1A; --az-clock: #FF7A1A; }
+    :root[data-palette="blend"][data-accent="oranje"] { --az-action: #FFA126; --az-hero-accent: #FFA126; --az-hero-action: #FFA126; --az-clock: #FFA126; }
+    :root[data-palette="blend"][data-accent="kit"] { --az-action: #FF8C1A; --az-hero-accent: #FF8C1A; --az-hero-action: #FF8C1A; --az-clock: #FF8C1A; }
+    :root[data-palette="blend"][data-accent="bright"] { --az-action: #FF8000; --az-hero-accent: #FF8000; --az-hero-action: #FF8000; --az-clock: #FF8000; }
+    :root[data-palette="blend"][data-accent="yellowcard"] { --az-action: #FFC62E; --az-hero-accent: #FFC62E; --az-hero-action: #FFC62E; --az-clock: #FFC62E; }
+    :root[data-palette="blend"][data-accent="green"] { --az-action: #2FD175; --az-hero-accent: #2FD175; --az-hero-action: #2FD175; --az-clock: #2FD175; }
+    :root[data-palette="blend"][data-accent="mint"] { --az-action: #3FE0B0; --az-hero-accent: #3FE0B0; --az-hero-action: #3FE0B0; --az-clock: #3FE0B0; }
+    :root[data-palette="blend"][data-accent="red"] { --az-action: #F2493B; --az-hero-accent: #F2493B; --az-hero-action: #F2493B; --az-clock: #F2493B; }
+    :root[data-palette="blend"][data-accent="blue"] { --az-action: #3AA0FF; --az-hero-accent: #3AA0FF; --az-hero-action: #3AA0FF; --az-clock: #3AA0FF; }
+
+    /* Hero options for G (blend), chosen with ?hero=; navy is the default. Neutral ink replaces navy in buttons, bars and dark-mode grounds. */
+    /* G with pitch green: every app green (match badges, starting status, on-track text, fair-minutes bar, switches) uses the button green #2FD175.
+       Light-mode text uses #1A7541, the same hue darkened to pass contrast on white. The lineup pitch turf is left as is. */
+    :root[data-palette="blend"][data-accent="green"] {
+      --az-event-match: #2FD175; --az-status-start: #2FD175; --az-ok-fill: #2FD175; --az-on-target: #1A7541;
+    }
+    :root[data-palette="blend"][data-accent="green"][data-theme="dark"] { --az-on-target: #2FD175; }
+    :root[data-palette="blend"][data-hero="charcoal"] {
+      --az-hero: #1E2124; --az-hero-tile: #2A2E33; --az-on-hero-muted: #B4B8BE; --az-section-bar: #1E2124; --az-tray: #1E2124;
+      --az-text-accent: #2A2E33; --az-on-action: #141414; --az-action-edge: #141414; --az-on-hero-action: #141414;
+    }
+    :root[data-palette="blend"][data-hero="black"] {
+      --az-hero: #0B0B0C; --az-hero-tile: #1C1C1E; --az-on-hero-muted: #B4B4B8; --az-section-bar: #0B0B0C; --az-tray: #0B0B0C;
+      --az-text-accent: #1C1C1E; --az-on-action: #0B0B0C; --az-action-edge: #0B0B0C; --az-on-hero-action: #0B0B0C;
+    }
+    :root[data-palette="blend"][data-hero="charcoal"][data-theme="dark"] {
+      --az-canvas: #0F1012; --az-surface: #1A1C1F; --az-hairline: #2C2F33; --az-fill-subtle: #2C2F33; --az-border: #858A92;
+      --az-text-secondary: #B4B8BE; --az-text-muted: #8C9097; --az-text-accent: var(--az-action);
+      --az-hero: #26292D; --az-hero-tile: #1A1C1F; --az-section-bar: #33373C; --az-tray: #26292D; --az-on-action: #141414;
+    }
+    :root[data-palette="blend"][data-hero="black"][data-theme="dark"] {
+      --az-canvas: #000000; --az-surface: #141416; --az-hairline: #26262A; --az-fill-subtle: #26262A; --az-border: #85858C;
+      --az-text-secondary: #B4B4B8; --az-text-muted: #8C8C92; --az-text-accent: var(--az-action);
+      --az-hero: #141416; --az-hero-tile: #000000; --az-section-bar: #2A2A2E; --az-tray: #141416; --az-on-action: #0B0B0C;
+      --az-on-selected: #000000; --az-on-jersey: #000000;
+    }
+
+    /* G high contrast (Appearance > High contrast, or ?theme=contrast): white ground, pure black ink and hairlines, the same pitch green with a black edge. */
+    :root[data-palette="blend"][data-theme="outdoor"],
+    :root[data-palette="blend"][data-hero][data-accent][data-theme="outdoor"] {
+      --az-canvas: #FFFFFF; --az-surface: #FFFFFF; --az-hairline: #0B0B0C; --az-border: #0B0B0C; --az-fill-subtle: #E6E9EF;
+      --az-text-primary: #000000; --az-text-secondary: #1C1C1E; --az-text-muted: #3A3A3E; --az-text-accent: #000000;
+      --az-on-action: #000000; --az-action-edge: #000000; --az-selected: #000000; --az-on-selected: #FFFFFF;
+      --az-attention: #FFD400; --az-on-attention: #000000;
+      --az-hero: #000000; --az-on-hero: #FFFFFF; --az-on-hero-muted: #D4D4D8; --az-hero-tile: #1C1C1E; --az-on-hero-action: #000000;
+      --az-section-bar: #000000; --az-on-section-bar: #FFFFFF; --az-tray: #000000; --az-on-tray: #FFFFFF;
+      --az-on-target: #0E5A30; --az-urgent: #A80105; --az-jersey: #0A72D0; --az-on-jersey: #FFFFFF;
     }
 
     /* PDF layout: hero stat tiles and the Fair minutes bar */
@@ -755,7 +831,7 @@
     .hero-tile-unit { font-family: var(--az-font-ui); font-size: var(--az-fs-eyebrow); font-weight: var(--az-w-eyebrow); letter-spacing: 0; }
     .hero-tile-cap { font-size: var(--az-fs-eyebrow); line-height: var(--az-lh-eyebrow); font-weight: var(--az-w-eyebrow); letter-spacing: var(--az-track-eyebrow); text-transform: uppercase; color: var(--az-on-hero-muted); }
     .fair-bar { display: flex; gap: var(--az-space-1); }
-    .fair-seg { display: block; flex: 1 1 0; height: 8px; border-radius: var(--az-radius-full); background: var(--az-on-target); }
+    .fair-seg { display: block; flex: 1 1 0; height: 8px; border-radius: var(--az-radius-full); background: var(--az-ok-fill, var(--az-on-target)); }
     .fair-seg.is-due { background: var(--az-attention); box-shadow: inset 0 0 0 1px rgba(0,0,0,.28); }
     .fair-need { color: var(--az-text-accent); font-weight: 700; }
     .section-eyebrow { display: flex; align-items: center; gap: var(--az-space-1); font-size: var(--az-fs-eyebrow); line-height: var(--az-lh-eyebrow); font-weight: var(--az-w-eyebrow); letter-spacing: var(--az-track-eyebrow); text-transform: uppercase; color: var(--az-text-secondary); }
@@ -919,6 +995,7 @@
     const mins = s => Math.floor(s / 60);
 
     const LAYOUT_PDF = document.documentElement.dataset.layout === 'pdf';
+    const IS_G = document.documentElement.dataset.palette === 'blend';
 
     /* ---------- appearance ---------- */
     const mqDark = window.matchMedia('(prefers-color-scheme: dark)');
@@ -926,7 +1003,7 @@
       get: () => { try { return localStorage.getItem('artizo-theme'); } catch (e) { return null; } },
       set: v => { try { localStorage.setItem('artizo-theme', v); } catch (e) {} }
     };
-    const okTheme = v => (['system', 'light', 'dark'].indexOf(v) >= 0 ? v : null);
+    const okTheme = v => (['system', 'light', 'dark', 'contrast'].indexOf(v) >= 0 ? v : null);
     let themePref = okTheme(new URLSearchParams(location.search).get('theme')) || okTheme(themeStore.get()) || 'system';
     let gamedayLive = false;
     // Design-system themes: dark at night, outdoor on the live match, indoor everywhere else.
@@ -935,7 +1012,8 @@
       const dark = themePref === 'system' ? mqDark.matches : themePref === 'dark';
       const pal = root.dataset.palette;
       const outdoorOk = !pal || pal === 'cream';
-      root.dataset.theme = dark ? 'dark' : (gamedayLive && outdoorOk ? 'outdoor' : 'indoor');
+      // High contrast is the outdoor theme chosen by hand; it holds on every screen, not just the live match.
+      root.dataset.theme = themePref === 'contrast' ? 'outdoor' : dark ? 'dark' : (gamedayLive && outdoorOk ? 'outdoor' : 'indoor');
       root.classList.toggle('is-gameday', gamedayLive);
     }
     mqDark.addEventListener('change', applyTheme);
@@ -1141,7 +1219,8 @@
       const upcoming = evs.filter(e => !isPast(e) && !isLive(e));
       const past = evs.filter(isPast).reverse();
       let hero, coming;
-      const pdf = LAYOUT_PDF ? pdfHomeHero(t, live, upcoming) : null;
+      // G keeps the PDF Gameday but drops the hero stat tiles: its Home hero is the clean one-line version.
+      const pdf = LAYOUT_PDF && !IS_G ? pdfHomeHero(t, live, upcoming) : null;
       if (pdf) { hero = pdf.hero; coming = pdf.coming; }
       else if (live) {
         const f = fair();
@@ -1431,7 +1510,7 @@
     }
 
     function appearanceSheet() {
-      const opts = [['system', 'Match system', 'Follows the phone setting'], ['light', 'Light', ''], ['dark', 'Dark', '']];
+      const opts = [['system', 'Match system', 'Follows the phone setting'], ['light', 'Light', ''], ['dark', 'Dark', ''], ['contrast', 'High contrast', 'For bright sun']];
       return sheetHead('Appearance', '') + '<div class="pick-list" role="radiogroup" aria-label="Appearance">' +
         opts.map(o => '<button class="pick od-row" role="radio" aria-checked="' + (themePref === o[0]) + '" data-action="theme" data-v="' + o[0] + '"><span class="od-field od-fill"><span class="ev-title">' + o[1] +
           '</span>' + (o[2] ? '<span class="ev-meta">' + o[2] + '</span>' : '') + '</span>' + (themePref === o[0] ? icon('check') : '') + '</button>').join('') + '</div>';
@@ -1626,7 +1705,7 @@
           : emptyState('check-circle', state.rosterFilter === 'out' ? 'Nobody is out' : 'Nobody is available', state.rosterFilter === 'out' ? 'Everyone is available.' : 'Every player is marked out.',
               '<button class="btn btn-secondary" data-action="roster-filter" data-v="all">Show all players</button>')) + '</section>';
       }
-      html += '<div class="brand-foot"><div class="brand-lockup is-default"><img class="od-media" src="artizo-lockup-transparent.png" width="886" height="809" alt="Artizo Sport"></div><div class="brand-lockup is-reversed"><img class="od-media" src="artizo-lockup-reversed-transparent.png" width="886" height="809" alt="Artizo Sport"></div></div>';
+      if (!IS_G) html += '<div class="brand-foot"><div class="brand-lockup is-default"><img class="od-media" src="artizo-lockup-transparent.png" width="886" height="809" alt="Artizo Sport"></div><div class="brand-lockup is-reversed"><img class="od-media" src="artizo-lockup-reversed-transparent.png" width="886" height="809" alt="Artizo Sport"></div></div>';
       $('#body-team').innerHTML = html;
     }
 

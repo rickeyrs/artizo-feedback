@@ -11,6 +11,8 @@
       if (t !== 'light' && t !== 'dark') t = (saved === 'light' || saved === 'dark') ? saved : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       d.dataset.theme = t;
       if (q.get('embed') === '1') d.classList.add('is-embed');
+      var ty = q.get('type');
+      if (ty === 'bold' || ty === 'light' || ty === 'condensed' || ty === 'system' || ty === 'original') d.dataset.type = ty;
     })();
   </script>
   <style>
@@ -81,6 +83,16 @@
       font-style: normal;
       font-display: swap;
     }
+
+    /* Board font options (?type=): Archivo or the design-system faces in place of A's own pair. */
+    @font-face { font-family: "Archivo"; src: url("assets/fonts/archivo-latin.woff2") format("woff2"); font-weight: 700 800; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Archivo Var"; src: url("assets/fonts/archivo-var-latin.woff2") format("woff2"); font-weight: 100 900; font-stretch: 62% 125%; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Newsreader"; src: url("Newsreader-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Newsreader"; src: url("Newsreader-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Newsreader"; src: url("Newsreader-700.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Source Sans 3"; src: url("SourceSans3-700.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
 
     /* ---------- Handset shell (Open Design neutral shell, kept intact) ---------- */
     :root {
@@ -348,6 +360,15 @@
       --phone-screen-bg: var(--c-ground);
       --phone-system-fg: var(--c-ink);
     }
+    :root[data-type="bold"] { --font-display: "Archivo", "Source Sans 3", system-ui, sans-serif; --font-body: "Source Sans 3", system-ui, sans-serif; }
+    /* Lighter Archivo: A sets display weights in each rule, so step them down here. */
+    :root[data-type="light"] { --font-display: "Archivo Var", "Source Sans 3", system-ui, sans-serif; --font-body: "Source Sans 3", system-ui, sans-serif; }
+    :root[data-type="light"] :is(.screen-bar h1, .hero-title, .hero-clock, .hero-num, .dc-d, .stat-num, .sb-score, .clock, .token-num, .prow-num, .block-start, .jersey, .sheet h2, .stepper-val, .bench-num) { font-weight: 600; }
+    :root[data-type="light"] :is(.section-head h2, .section > h2, .day-num, .day-head, .empty h2, .empty h3, .fair h2) { font-weight: 500; }
+    /* Condensed scores: Archivo headings, clock and score numerals in Archivo's narrow (75%) width. */
+    :root[data-type="condensed"] { --font-display: "Archivo", "Source Sans 3", system-ui, sans-serif; --font-body: "Source Sans 3", system-ui, sans-serif; }
+    :root[data-type="condensed"] :is(.clock, .hero-clock, .hero-num, .sb-score, .stat-num) { font-family: "Archivo Var", "Archivo", sans-serif; font-stretch: 75%; font-weight: 800; }
+    :root[data-type="system"] { --font-display: "Newsreader", Georgia, serif; --font-body: "Source Sans 3", system-ui, sans-serif; }
 
     /* Dark theme: one token set, applied through data-theme on the root. */
     :root[data-theme="dark"] {

@@ -59,6 +59,7 @@
     .control-label { font-size: 15px; line-height: 21px; font-weight: 600; color: var(--az-text-secondary); }
     .seg { display: flex; gap: var(--az-space-1); padding: var(--az-space-1); border-radius: var(--az-radius-lg); background: var(--az-fill-subtle); }
     .seg button { min-height: var(--az-tap-min); padding: 0 var(--az-space-4); border: 0; border-radius: var(--az-space-2); background: transparent; color: var(--az-text-secondary); font: inherit; font-size: 15px; line-height: 21px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .seg-wrap { flex-wrap: wrap; }
     .seg button[aria-pressed="true"] { background: var(--az-selected); color: var(--az-on-selected); }
 
     .rows { display: grid; gap: var(--az-space-8); padding: var(--az-space-8); }
@@ -133,13 +134,13 @@
   <header class="head">
     <div class="head-text">
       <p class="eyebrow">Artizo Sport · directions for feedback</p>
-      <h1>Six directions, side by side</h1>
+      <h1>Four directions, side by side</h1>
       <p class="lede">Every phone is a working prototype of a youth-soccer coaching app. Tap, scroll and drag inside any of them.</p>
     </div>
     <section class="welcome" aria-labelledby="welcome-title">
       <h2 id="welcome-title">Thanks for helping. Three steps:</h2>
       <ol>
-        <li>Try the phones in each row, A to F.</li>
+        <li>Try the phones in each row: G, A, B and F.</li>
         <li>Rate each letter from 1 to 5 and add a note if you like.</li>
         <li>At the bottom, pick your favourite letter and press Email my feedback.</li>
       </ol>
@@ -147,17 +148,10 @@
     <fieldset class="controls">
       <legend class="vh" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Board settings</legend>
       <div class="control">
-        <span class="control-label" id="lbl-layout">Layout for C to F</span>
+        <span class="control-label" id="lbl-layout">Layout for F and G</span>
         <div class="seg" role="group" aria-labelledby="lbl-layout">
           <button type="button" data-set="layout" data-value="pdf" aria-pressed="true">PDF layouts</button>
           <button type="button" data-set="layout" data-value="current" aria-pressed="false">Today's layouts</button>
-        </div>
-      </div>
-      <div class="control">
-        <span class="control-label" id="lbl-type">Fonts for C to E</span>
-        <div class="seg" role="group" aria-labelledby="lbl-type">
-          <button type="button" data-set="type" data-value="bold" aria-pressed="true">Bold sans</button>
-          <button type="button" data-set="type" data-value="system" aria-pressed="false">System fonts</button>
         </div>
       </div>
       <div class="control">
@@ -170,8 +164,8 @@
       <div class="control">
         <span class="control-label" id="lbl-screens">Screens</span>
         <div class="seg" role="group" aria-labelledby="lbl-screens">
-          <button type="button" data-set="screens" data-value="pdf" aria-pressed="true">PDF three</button>
-          <button type="button" data-set="screens" data-value="all" aria-pressed="false">All six</button>
+          <button type="button" data-set="screens" data-value="pdf" aria-pressed="false">PDF three</button>
+          <button type="button" data-set="screens" data-value="all" aria-pressed="true">All six</button>
         </div>
       </div>
     </fieldset>
@@ -199,18 +193,16 @@
     </div>
   </section>
 
-  <noscript><p style="padding:16px">This board needs JavaScript turned on to load the phones. You can still open app.html and original-direction.html directly.</p></noscript>
+  <noscript><p style="padding:16px">This board needs JavaScript turned on to load the phones. You can still open index.html and original-direction.html directly.</p></noscript>
 
   <script>
   (function () {
     'use strict';
     var VERSIONS = [
-      { letter: 'A', name: 'Original direction', note: 'Cool grey, navy and copper. Bricolage Grotesque and Inter.', file: 'original-direction.html', fixed: true },
-      { letter: 'B', name: 'Design system today', note: 'Cream and slate from DESIGN.md. Newsreader and Source Sans 3.', file: 'app.html', fixed: true },
-      { letter: 'C', name: 'Pitch green', note: 'Green hero, white button, lime clock, white kits.', file: 'app.html', palette: 'pitch' },
-      { letter: 'D', name: 'Navy and lime', note: 'Navy hero, lime button and clock, lime kits.', file: 'app.html', palette: 'navy' },
-      { letter: 'E', name: 'Charcoal and orange', note: 'Charcoal hero, orange button and clock, red kits.', file: 'app.html', palette: 'ember' },
-      { letter: 'F', name: 'Cream design system', note: 'Your design system with the PDF layout option. Always Newsreader and Source Sans 3.', file: 'app.html', palette: 'cream' }
+      { letter: 'G', name: 'Final direction', note: 'True black hero with a pitch-green button and clock. Slate ink, blue kits and Source Sans 3 from B. Cool grey ground and tighter spacing from A. Black section bars. Own fonts: lighter Archivo headings with condensed scores and clock, Source Sans 3 text.', file: 'app.html', palette: 'blend', extra: '&hero=black&accent=green' },
+      { letter: 'A', name: 'Original direction', note: 'Cool grey, navy and copper. Own fonts: Bricolage Grotesque headings, Inter text.', file: 'original-direction.html', fixed: true },
+      { letter: 'B', name: 'Earlier design system (v1)', note: 'The earlier cream-and-slate design system (v1). Own fonts: Newsreader headings, Source Sans 3 text.', file: 'app.html', fixed: true, extra: '&palette=ds' },
+      { letter: 'F', name: 'Cream design system', note: 'Your design system with the PDF layout option. Own fonts: Newsreader headings, Source Sans 3 text.', file: 'app.html', palette: 'cream' }
     ];
     var SCREENS = {
       pdf: [
@@ -227,13 +219,14 @@
         { route: 'team', name: 'Team' }
       ]
     };
-    var settings = { layout: 'pdf', type: 'bold', theme: 'light', screens: 'pdf' };
+    var settings = { layout: 'pdf', theme: 'light', screens: 'all' };
     var FRAME_W = 482, GAP = 8;
     var rows = document.getElementById('rows');
 
     function src(v, sc) {
       var q = 'embed=1&theme=' + settings.theme;
-      if (!v.fixed) q += '&palette=' + v.palette + '&layout=' + settings.layout + '&type=' + settings.type;
+      if (!v.fixed) q += '&palette=' + v.palette + '&layout=' + settings.layout;
+      if (v.extra) q += v.extra;
       return v.file + '?' + q + (sc.extra || '') + '#/' + sc.route;
     }
 
@@ -284,7 +277,7 @@
     }
     function feedbackText() {
       var lines = ['Artizo Sport feedback', 'Name: ' + (nameEl.value.trim() || 'Not given'), 'Date: ' + new Date().toLocaleString(),
-        'Board settings: layout ' + settings.layout + ', fonts ' + settings.type + ', appearance ' + settings.theme, '', 'Overall pick: ' + pickText(), ''];
+        'Board settings: layout ' + settings.layout + , appearance ' + settings.theme, '', 'Overall pick: ' + pickText(), ''];
       VERSIONS.forEach(function (v) {
         var r = recall('rate:' + v.letter);
         lines.push(v.letter + ' · ' + v.name + ' (' + (r ? r + '/5' : 'not rated') + '): ' + (recall(v.letter).trim() || 'No comment'));
